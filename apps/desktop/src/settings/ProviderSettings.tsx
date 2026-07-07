@@ -1,9 +1,11 @@
 import { KeyRound, Trash2 } from "lucide-react";
 import type { ProviderId, WorkBuddyConfig } from "../config/schema";
+import type { Translations } from "../i18n";
 
 type ProviderSettingsProps = {
   config: WorkBuddyConfig;
   apiKeys: Partial<Record<ProviderId, string>>;
+  labels: Translations["providers"];
   onConfigChange: (config: WorkBuddyConfig) => void;
   onApiKeyChange: (provider: ProviderId, value: string) => void;
   onApiKeyDelete: (provider: ProviderId) => void;
@@ -14,6 +16,7 @@ const providerIds: ProviderId[] = ["openai", "claude", "deepseek"];
 export function ProviderSettings({
   config,
   apiKeys,
+  labels,
   onConfigChange,
   onApiKeyChange,
   onApiKeyDelete,
@@ -34,7 +37,7 @@ export function ProviderSettings({
   return (
     <div className="settings-stack">
       <label className="field">
-        <span>Active provider</span>
+        <span>{labels.activeProvider}</span>
         <select
           value={config.activeProvider}
           onChange={(event) =>
@@ -61,49 +64,49 @@ export function ProviderSettings({
                   checked={provider.enabled}
                   onChange={(event) => updateProvider(providerId, "enabled", event.target.checked)}
                 />
-                Enabled
+                {labels.enabled}
               </label>
             </header>
 
             <div className="settings-grid">
               <label className="field">
-                <span>Display name</span>
+                <span>{labels.displayName}</span>
                 <input
                   value={provider.displayName}
                   onChange={(event) => updateProvider(providerId, "displayName", event.target.value)}
                 />
               </label>
               <label className="field">
-                <span>Base URL</span>
+                <span>{labels.baseUrl}</span>
                 <input
                   value={provider.baseUrl}
                   onChange={(event) => updateProvider(providerId, "baseUrl", event.target.value)}
                 />
               </label>
               <label className="field">
-                <span>Model ID</span>
+                <span>{labels.modelId}</span>
                 <input
                   value={provider.modelId}
                   onChange={(event) => updateProvider(providerId, "modelId", event.target.value)}
                 />
               </label>
               <label className="field">
-                <span>API Key</span>
+                <span>{labels.apiKey}</span>
                 <div className="inline-input">
                   <KeyRound size={15} />
                   <input
                     type="password"
                     value={apiKeys[providerId] ?? ""}
-                    placeholder="Stored locally"
+                    placeholder={labels.storedLocally}
                     onChange={(event) => onApiKeyChange(providerId, event.target.value)}
                   />
-                  <button type="button" title="Delete key" onClick={() => onApiKeyDelete(providerId)}>
+                  <button type="button" title={labels.deleteKey} onClick={() => onApiKeyDelete(providerId)}>
                     <Trash2 size={15} />
                   </button>
                 </div>
               </label>
               <label className="field">
-                <span>Temperature</span>
+                <span>{labels.temperature}</span>
                 <input
                   type="number"
                   min={0}
@@ -116,7 +119,7 @@ export function ProviderSettings({
                 />
               </label>
               <label className="field">
-                <span>Max tokens</span>
+                <span>{labels.maxTokens}</span>
                 <input
                   type="number"
                   min={128}
@@ -130,7 +133,7 @@ export function ProviderSettings({
             </div>
 
             <label className="field">
-              <span>System prompt</span>
+              <span>{labels.systemPrompt}</span>
               <textarea
                 rows={3}
                 value={provider.systemPrompt}
@@ -143,4 +146,3 @@ export function ProviderSettings({
     </div>
   );
 }
-

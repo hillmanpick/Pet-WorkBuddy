@@ -6,12 +6,9 @@
   "author": "hillmanpick",
   "license": "MIT",
   "type": "module",
-  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
-    "electron:start": "pnpm build && electron electron/main.cjs",
-    "electron:pack": "pnpm build && electron-builder --win portable --x64",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "tsc -b --pretty false",
     "typecheck": "tsc -b --pretty false",
@@ -32,34 +29,7 @@
     "@types/react-dom": "^18.3.0",
     "@types/three": "^0.166.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "electron": "^31.7.7",
-    "electron-builder": "^24.13.3",
     "typescript": "^5.5.3",
     "vite": "^5.3.4"
-  },
-  "build": {
-    "appId": "com.hillmanpick.workbuddy",
-    "productName": "WorkBuddy",
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "files": [
-      "dist/**",
-      "electron/**",
-      "package.json"
-    ],
-    "win": {
-      "icon": "build/icon.ico",
-      "target": [
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "artifactName": "WorkBuddy-${version}-${arch}.${ext}"
-    }
   }
 }

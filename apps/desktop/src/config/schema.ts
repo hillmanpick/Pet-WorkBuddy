@@ -1,4 +1,5 @@
 export type ProviderId = "openai" | "claude" | "deepseek";
+export type UiLanguage = "en" | "zh";
 
 export type ProviderConfig = {
   enabled: boolean;
@@ -25,17 +26,28 @@ export type ShortcutConfig = {
   quickAsk: string;
 };
 
+export type ComputerControlConfig = {
+  enabled: boolean;
+  requireConfirmation: boolean;
+  allowWechatSend: boolean;
+};
+
 export type WorkBuddyConfig = {
   activeProvider: ProviderId;
   activePetId: string;
   providers: Record<ProviderId, ProviderConfig>;
   shortcuts: ShortcutConfig;
   quickCommands: QuickCommand[];
+  appearance: {
+    petSize: number;
+    language: UiLanguage;
+  };
   behavior: {
     startHidden: boolean;
     longIdleMinutes: number;
     mousePassthrough: boolean;
   };
+  computerControl: ComputerControlConfig;
 };
 
 export type PetAnimationConfig = {
@@ -75,4 +87,3 @@ export type ChatMessage = {
   content: string;
   createdAt: number;
 };
-

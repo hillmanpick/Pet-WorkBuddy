@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod computer_control;
 mod shortcuts;
 mod tray;
 mod window;
@@ -17,6 +18,7 @@ fn main() {
             commands::get_api_key,
             commands::set_api_key,
             commands::delete_api_key,
+            computer_control::execute_computer_actions,
             shortcuts::register_shortcut,
             shortcuts::unregister_shortcut,
             window::show_app_window,

@@ -1,6 +1,6 @@
 import { defaultConfig, mergeConfig } from "../config/defaultConfig";
 import type { WorkBuddyConfig } from "../config/schema";
-import { invokeCommand, isElectronRuntime, isTauriRuntime } from "../tauri/tauriClient";
+import { invokeCommand, isTauriRuntime } from "../tauri/tauriClient";
 
 const CONFIG_KEY = "workbuddy.config";
 const SECRET_PREFIX = "workbuddy.secret.";
@@ -21,7 +21,7 @@ export async function saveConfig(config: WorkBuddyConfig): Promise<void> {
 }
 
 export async function getApiKey(provider: string): Promise<string> {
-  if (isTauriRuntime() || isElectronRuntime()) {
+  if (isTauriRuntime()) {
     const value = await invokeCommand<string | null>("get_api_key", { provider });
     return value ?? "";
   }
@@ -30,7 +30,7 @@ export async function getApiKey(provider: string): Promise<string> {
 }
 
 export async function setApiKey(provider: string, apiKey: string): Promise<void> {
-  if (isTauriRuntime() || isElectronRuntime()) {
+  if (isTauriRuntime()) {
     await invokeCommand("set_api_key", { provider, apiKey });
     return;
   }
@@ -39,7 +39,7 @@ export async function setApiKey(provider: string, apiKey: string): Promise<void>
 }
 
 export async function deleteApiKey(provider: string): Promise<void> {
-  if (isTauriRuntime() || isElectronRuntime()) {
+  if (isTauriRuntime()) {
     await invokeCommand("delete_api_key", { provider });
     return;
   }

@@ -1,13 +1,15 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { QuickCommand, WorkBuddyConfig } from "../config/schema";
+import type { Translations } from "../i18n";
 import { ShortcutRecorder } from "../shortcuts/ShortcutRecorder";
 
 type ShortcutSettingsProps = {
   config: WorkBuddyConfig;
+  labels: Translations["shortcuts"];
   onConfigChange: (config: WorkBuddyConfig) => void;
 };
 
-export function ShortcutSettings({ config, onConfigChange }: ShortcutSettingsProps) {
+export function ShortcutSettings({ config, labels, onConfigChange }: ShortcutSettingsProps) {
   function updateShortcut(key: keyof WorkBuddyConfig["shortcuts"], value: string) {
     onConfigChange({
       ...config,
@@ -31,7 +33,7 @@ export function ShortcutSettings({ config, onConfigChange }: ShortcutSettingsPro
         ...config.quickCommands,
         {
           id: `command-${Date.now()}`,
-          name: "New Command",
+          name: labels.newCommand,
           shortcut: "",
           prompt: "",
         },
@@ -49,24 +51,24 @@ export function ShortcutSettings({ config, onConfigChange }: ShortcutSettingsPro
   return (
     <div className="settings-stack">
       <section className="settings-group">
-        <h3>Global shortcuts</h3>
+        <h3>{labels.global}</h3>
         <div className="shortcut-grid">
-          <span>Toggle chat</span>
+          <span>{labels.toggleChat}</span>
           <ShortcutRecorder
             value={config.shortcuts.toggleChat}
             onChange={(value) => updateShortcut("toggleChat", value)}
           />
-          <span>Hide pet</span>
+          <span>{labels.hidePet}</span>
           <ShortcutRecorder
             value={config.shortcuts.hidePet}
             onChange={(value) => updateShortcut("hidePet", value)}
           />
-          <span>Center pet</span>
+          <span>{labels.centerPet}</span>
           <ShortcutRecorder
             value={config.shortcuts.centerPet}
             onChange={(value) => updateShortcut("centerPet", value)}
           />
-          <span>Quick ask</span>
+          <span>{labels.quickAsk}</span>
           <ShortcutRecorder
             value={config.shortcuts.quickAsk}
             onChange={(value) => updateShortcut("quickAsk", value)}
@@ -76,10 +78,10 @@ export function ShortcutSettings({ config, onConfigChange }: ShortcutSettingsPro
 
       <section className="settings-group">
         <header>
-          <h3>Quick commands</h3>
+          <h3>{labels.quickCommands}</h3>
           <button type="button" onClick={addCommand}>
             <Plus size={15} />
-            Add
+            {labels.add}
           </button>
         </header>
 
@@ -87,7 +89,7 @@ export function ShortcutSettings({ config, onConfigChange }: ShortcutSettingsPro
           {config.quickCommands.map((command, index) => (
             <article className="command-editor" key={command.id}>
               <label className="field">
-                <span>Name</span>
+                <span>{labels.name}</span>
                 <input
                   value={command.name}
                   onChange={(event) =>
@@ -96,14 +98,14 @@ export function ShortcutSettings({ config, onConfigChange }: ShortcutSettingsPro
                 />
               </label>
               <label className="field">
-                <span>Shortcut</span>
+                <span>{labels.shortcut}</span>
                 <ShortcutRecorder
                   value={command.shortcut}
                   onChange={(value) => updateCommand(index, { ...command, shortcut: value })}
                 />
               </label>
               <label className="field command-prompt">
-                <span>Prompt</span>
+                <span>{labels.prompt}</span>
                 <textarea
                   rows={2}
                   value={command.prompt}
@@ -112,7 +114,7 @@ export function ShortcutSettings({ config, onConfigChange }: ShortcutSettingsPro
                   }
                 />
               </label>
-              <button type="button" title="Remove" onClick={() => removeCommand(index)}>
+              <button type="button" title={labels.remove} onClick={() => removeCommand(index)}>
                 <Trash2 size={15} />
               </button>
             </article>
@@ -122,4 +124,3 @@ export function ShortcutSettings({ config, onConfigChange }: ShortcutSettingsPro
     </div>
   );
 }
-

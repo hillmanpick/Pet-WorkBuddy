@@ -1,15 +1,21 @@
-import { Bot, Settings, X } from "lucide-react";
 import type { ChatMessage, QuickCommand, WorkBuddyConfig } from "../config/schema";
-import { MessageList } from "../chat/MessageList";
+import type { Translations } from "../i18n";
 import { PromptBox } from "../chat/PromptBox";
+import { ComputerTaskPanel, type ComputerTaskPhase } from "./ComputerTaskPanel";
+import type { ComputerTaskPlan } from "../computer/ComputerTask";
 
 type ChatWindowProps = {
   config: WorkBuddyConfig;
   messages: ChatMessage[];
   busy: boolean;
   focusToken: number;
+  labels: Translations["chat"];
+  computerLabels: Translations["computer"];
+  computerTask: { plan: ComputerTaskPlan; phase: ComputerTaskPhase } | null;
   onSend: (message: string) => void;
   onRunQuickCommand: (command: QuickCommand) => void;
+  onConfirmComputerTask: () => void;
+  onCancelComputerTask: () => void;
   onOpenSettings: () => void;
   onClose: () => void;
 };
@@ -19,50 +25,36 @@ export function ChatWindow({
   messages,
   busy,
   focusToken,
+  labels,
+  computerLabels,
+  computerTask,
   onSend,
   onRunQuickCommand,
+  onConfirmComputerTask,
+  onCancelComputerTask,
   onOpenSettings,
   onClose,
 }: ChatWindowProps) {
-  const provider = config.providers[config.activeProvider];
-
   return (
-    <section className="panel chat-panel">
-      <header className="panel-header">
-        <div>
-          <span className="panel-kicker">{provider.displayName}</span>
-          <h2>
-            <Bot size={18} />
-            WorkBuddy Chat
-          </h2>
-        </div>
-        <div className="panel-actions">
-          <button type="button" title="Settings" onClick={onOpenSettings}>
-            <Settings size={17} />
-          </button>
-          <button type="button" title="Close" onClick={onClose}>
-            <X size={17} />
-          </button>
-        </div>
-      </header>
+    <section className="chat-panel" aria-label={labels.title}>
+      {computerTask ? (
+        <ComputerTaskPanel
+          plan={computerTask.plan}
+          phase={computerTask.phase}
+          busy={busy}
+          labels={computerLabels}
+          onConfirm={onConfirmComputerTask}
+          onCancel={onCancelComputerTask}
+        />
+      ) : null}
 
-      <MessageList messages={messages} />
-
-      <div className="quick-command-row">
-        {config.quickCommands.map((command) => (
-          <button
-            key={command.id}
-            type="button"
-            disabled={busy}
-            onClick={() => onRunQuickCommand(command)}
-          >
-            {command.name}
-          </button>
-        ))}
-      </div>
-
-      <PromptBox disabled={busy} focusToken={focusToken} onSend={onSend} />
+      <PromptBox
+        disabled={busy}
+        focusToken={focusToken}
+        placeholder={labels.placeholder}
+        sendTitle={labels.send}
+        onSend={onSend}
+      />
     </section>
   );
 }
-

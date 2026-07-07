@@ -1,15 +1,18 @@
 import { Save, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 import type { ProviderId, WorkBuddyConfig } from "../config/schema";
+import type { Translations } from "../i18n";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
 import { ProviderSettings } from "../settings/ProviderSettings";
 import { PetSettings } from "../settings/PetSettings";
 import { ShortcutSettings } from "../settings/ShortcutSettings";
+import { AbilitySettings } from "../settings/AbilitySettings";
 
 type SettingsWindowProps = {
   config: WorkBuddyConfig;
   pets: LoadedPetPack[];
   apiKeys: Partial<Record<ProviderId, string>>;
+  labels: Translations;
   onConfigChange: (config: WorkBuddyConfig) => void;
   onApiKeyChange: (provider: ProviderId, value: string) => void;
   onApiKeyDelete: (provider: ProviderId) => void;
@@ -17,12 +20,13 @@ type SettingsWindowProps = {
   onClose: () => void;
 };
 
-type SettingsTab = "providers" | "pets" | "shortcuts";
+type SettingsTab = "providers" | "pets" | "shortcuts" | "abilities";
 
 export function SettingsWindow({
   config,
   pets,
   apiKeys,
+  labels,
   onConfigChange,
   onApiKeyChange,
   onApiKeyDelete,
@@ -35,17 +39,17 @@ export function SettingsWindow({
     <section className="panel settings-panel">
       <header className="panel-header">
         <div>
-          <span className="panel-kicker">Local settings</span>
+          <span className="panel-kicker">{labels.settings.kicker}</span>
           <h2>
             <SlidersHorizontal size={18} />
-            WorkBuddy Settings
+            {labels.settings.title}
           </h2>
         </div>
         <div className="panel-actions">
-          <button type="button" title="Save" onClick={onSave}>
+          <button type="button" title={labels.settings.save} onClick={onSave}>
             <Save size={17} />
           </button>
-          <button type="button" title="Close" onClick={onClose}>
+          <button type="button" title={labels.settings.close} onClick={onClose}>
             <X size={17} />
           </button>
         </div>
@@ -53,13 +57,16 @@ export function SettingsWindow({
 
       <div className="tabs">
         <button className={tab === "providers" ? "active" : ""} type="button" onClick={() => setTab("providers")}>
-          Providers
+          {labels.settings.providers}
         </button>
         <button className={tab === "pets" ? "active" : ""} type="button" onClick={() => setTab("pets")}>
-          Pets
+          {labels.settings.pets}
         </button>
         <button className={tab === "shortcuts" ? "active" : ""} type="button" onClick={() => setTab("shortcuts")}>
-          Shortcuts
+          {labels.settings.shortcuts}
+        </button>
+        <button className={tab === "abilities" ? "active" : ""} type="button" onClick={() => setTab("abilities")}>
+          {labels.settings.abilities}
         </button>
       </div>
 
@@ -68,17 +75,27 @@ export function SettingsWindow({
           <ProviderSettings
             config={config}
             apiKeys={apiKeys}
+            labels={labels.providers}
             onConfigChange={onConfigChange}
             onApiKeyChange={onApiKeyChange}
             onApiKeyDelete={onApiKeyDelete}
           />
         ) : null}
-        {tab === "pets" ? <PetSettings config={config} pets={pets} onConfigChange={onConfigChange} /> : null}
+        {tab === "pets" ? (
+          <PetSettings
+            config={config}
+            pets={pets}
+            labels={labels.pets}
+            onConfigChange={onConfigChange}
+          />
+        ) : null}
         {tab === "shortcuts" ? (
-          <ShortcutSettings config={config} onConfigChange={onConfigChange} />
+          <ShortcutSettings config={config} labels={labels.shortcuts} onConfigChange={onConfigChange} />
+        ) : null}
+        {tab === "abilities" ? (
+          <AbilitySettings config={config} labels={labels.abilities} onConfigChange={onConfigChange} />
         ) : null}
       </div>
     </section>
   );
 }
-

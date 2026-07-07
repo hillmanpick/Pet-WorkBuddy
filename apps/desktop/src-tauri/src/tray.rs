@@ -16,6 +16,11 @@ pub fn build_tray() -> SystemTray {
 }
 
 pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
+    if let SystemTrayEvent::DoubleClick { .. } = event {
+        show_main_window(app);
+        return;
+    }
+
     let SystemTrayEvent::MenuItemClick { id, .. } = event else {
         return;
     };
@@ -30,10 +35,6 @@ pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
         }
         "show_settings" => {
             let _ = app.emit_all("workbuddy://tray", "showSettings");
-            if let Some(window) = app.get_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
         }
         "toggle_pet" => {
             if let Some(window) = app.get_window("main") {
@@ -47,5 +48,12 @@ pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
         }
         "quit" => app.exit(0),
         _ => {}
+    }
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
     }
 }

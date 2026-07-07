@@ -64,10 +64,19 @@ export const defaultConfig: WorkBuddyConfig = {
       prompt: "Turn my current task into a 25-minute focus plan.",
     },
   ],
+  appearance: {
+    petSize: 190,
+    language: "zh",
+  },
   behavior: {
     startHidden: false,
     longIdleMinutes: 12,
     mousePassthrough: false,
+  },
+  computerControl: {
+    enabled: true,
+    requireConfirmation: true,
+    allowWechatSend: true,
   },
 };
 
@@ -88,11 +97,18 @@ export function mergeConfig(value: Partial<WorkBuddyConfig> | null): WorkBuddyCo
       ...defaultConfig.shortcuts,
       ...value.shortcuts,
     },
+    appearance: {
+      ...defaultConfig.appearance,
+      ...value.appearance,
+    },
     behavior: {
       ...defaultConfig.behavior,
       ...value.behavior,
     },
+    computerControl: {
+      ...defaultConfig.computerControl,
+      ...value.computerControl,
+    },
     quickCommands: value.quickCommands ?? defaultConfig.quickCommands,
   };
 }
-
