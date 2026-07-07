@@ -1,5 +1,5 @@
 import type { ShortcutConfig, WorkBuddyConfig } from "../config/schema";
-import { invokeCommand, isTauriRuntime } from "../tauri/tauriClient";
+import { invokeCommand, isElectronRuntime, isTauriRuntime } from "../tauri/tauriClient";
 
 export type ShortcutAction = keyof ShortcutConfig | `quickCommand:${string}`;
 
@@ -53,7 +53,7 @@ export function shortcutEntries(config: WorkBuddyConfig): Array<[ShortcutAction,
 }
 
 export async function registerConfiguredShortcuts(config: WorkBuddyConfig): Promise<void> {
-  if (!isTauriRuntime()) return;
+  if (!isTauriRuntime() && !isElectronRuntime()) return;
 
   await Promise.allSettled(
     shortcutEntries(config).map(([name, accelerator]) =>

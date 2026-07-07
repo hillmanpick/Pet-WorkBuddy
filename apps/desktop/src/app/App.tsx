@@ -13,6 +13,7 @@ import type { PetEvent } from "../pet/PetStateMachine";
 import {
   centerAppWindow,
   hideAppWindow,
+  isElectronRuntime,
   isTauriRuntime,
   listenTauriEvent,
   showAppWindow,
@@ -301,7 +302,7 @@ export function App() {
 
       <footer className="status-bar">
         <span>{status}</span>
-        <span>{isTauriRuntime() ? "Desktop" : "Browser preview"}</span>
+        <span>{isTauriRuntime() || isElectronRuntime() ? "Desktop" : "Browser preview"}</span>
       </footer>
     </main>
   );

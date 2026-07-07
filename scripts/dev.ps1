@@ -1,4 +1,3 @@
 $ErrorActionPreference = "Stop"
 pnpm install
-pnpm dev
-
+pnpm desktop

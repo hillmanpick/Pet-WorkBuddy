@@ -83,6 +83,7 @@ button {
   background: rgba(255, 255, 255, 0.72);
   box-shadow: 0 10px 24px rgba(32, 49, 57, 0.12);
   cursor: grab;
+  -webkit-app-region: drag;
 }
 
 .pet-bubble {

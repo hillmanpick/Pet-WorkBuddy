@@ -5,7 +5,8 @@ export type LoadedPetPack = PetPack & {
   basePath: string;
 };
 
-const MANIFEST_URL = "/pet-packs/manifest.json";
+const ASSET_BASE = import.meta.env.BASE_URL || "./";
+const MANIFEST_URL = `${ASSET_BASE}pet-packs/manifest.json`;
 
 export async function loadPetManifest(): Promise<PetManifest> {
   const response = await fetch(MANIFEST_URL);
@@ -16,7 +17,8 @@ export async function loadPetManifest(): Promise<PetManifest> {
 }
 
 export async function loadPetPack(path: string): Promise<LoadedPetPack> {
-  const response = await fetch(path);
+  const url = new URL(path, window.location.href).toString();
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to load pet pack: ${path}`);
   }
@@ -24,8 +26,8 @@ export async function loadPetPack(path: string): Promise<LoadedPetPack> {
   const pack = (await response.json()) as PetPack;
   return {
     ...pack,
-    manifestPath: path,
-    basePath: path.slice(0, path.lastIndexOf("/") + 1),
+    manifestPath: url,
+    basePath: url.slice(0, url.lastIndexOf("/") + 1),
   };
 }
 
@@ -42,4 +44,3 @@ export function resolvePetAsset(pack: LoadedPetPack, file: string): string {
   if (/^https?:\/\//.test(file) || file.startsWith("/")) return file;
   return `${pack.basePath}${file}`;
 }
-

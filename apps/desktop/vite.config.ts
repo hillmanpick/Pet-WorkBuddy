@@ -5,6 +5,7 @@ const host = process.env.TAURI_DEV_HOST ?? "127.0.0.1";
 
 export default defineConfig({
   plugins: [react()],
+  base: "./",
   clearScreen: false,
   server: {
     host,
@@ -15,4 +16,3 @@ export default defineConfig({
     },
   },
 });
-

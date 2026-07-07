@@ -4,13 +4,14 @@ WorkBuddy is an open-source AI desktop pet. It gives users a small animated comp
 
 ## Features
 
-- Transparent, always-on-top desktop pet window powered by Tauri.
+- Transparent, always-on-top desktop pet window powered by Electron by default.
+- Optional Tauri source is kept for a lighter future desktop target.
 - React + TypeScript settings and chat interface.
 - Three.js GLB pet rendering with animation clip mapping.
 - Default CC0 pet packs from Kenney Cube Pets.
 - Configurable ChatGPT, Claude, and DeepSeek providers.
 - Editable model IDs, base URLs, temperature, max token limits, and system prompts.
-- User-owned API keys stored through the OS keychain when running in Tauri.
+- User-owned API keys stored locally. Electron uses `safeStorage` when available; Tauri uses the OS keychain.
 - Custom global shortcuts for chat, hiding the pet, centering the pet, and quick prompts.
 - Local quick commands with optional shortcuts.
 - Update, dev, build, and clean command files for Windows users.
@@ -23,27 +24,33 @@ Install dependencies:
 pnpm install
 ```
 
-Run the web UI preview:
+Run the desktop app:
+
+```powershell
+pnpm desktop
+```
+
+Package the Windows desktop app:
+
+```powershell
+pnpm desktop:pack
+```
+
+Optional web UI preview:
 
 ```powershell
 pnpm dev
 ```
 
-Run the desktop app:
-
-```powershell
-pnpm tauri:dev
-```
-
-Tauri desktop builds require the Rust toolchain. Install Rust from https://www.rust-lang.org/tools/install before running Tauri commands.
+The default desktop target uses Electron so it can run without Rust. The Tauri source is also included for a lighter future target; Tauri builds require Rust and MSVC Build Tools.
 
 ## User Commands
 
 Windows users can double-click these files:
 
-- `dev.bat`
-- `build.bat`
-- `update.bat`
+- `dev.bat` starts the desktop app.
+- `build.bat` packages the Windows desktop app.
+- `update.bat` pulls the latest project files, installs dependencies, and rebuilds.
 
 PowerShell equivalents live in `scripts/`.
 
