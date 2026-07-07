@@ -1,0 +1,14 @@
+{
+  "defaultPetId": "kenney-cat",
+  "pets": [
+    { "id": "kenney-cat", "path": "/pet-packs/kenney-cat/pet.json" },
+    { "id": "kenney-dog", "path": "/pet-packs/kenney-dog/pet.json" },
+    { "id": "kenney-bunny", "path": "/pet-packs/kenney-bunny/pet.json" },
+    { "id": "kenney-panda", "path": "/pet-packs/kenney-panda/pet.json" },
+    { "id": "kenney-fox", "path": "/pet-packs/kenney-fox/pet.json" },
+    { "id": "kenney-penguin", "path": "/pet-packs/kenney-penguin/pet.json" },
+    { "id": "kenney-koala", "path": "/pet-packs/kenney-koala/pet.json" },
+    { "id": "kenney-chick", "path": "/pet-packs/kenney-chick/pet.json" }
+  ]
+}
+

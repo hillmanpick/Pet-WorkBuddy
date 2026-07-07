@@ -1,0 +1,30 @@
+{
+  "id": "kenney-koala",
+  "name": "Kenney Koala",
+  "source": "Kenney Cube Pets",
+  "sourceUrl": "https://kenney.nl/assets/cube-pets",
+  "license": "CC0-1.0",
+  "type": "gltf",
+  "model": "model.glb",
+  "preview": "preview.png",
+  "scale": 1.0,
+  "defaultAnimation": "idle",
+  "animations": {
+    "idle": { "clip": "idle", "loop": true },
+    "walk": { "clip": "walk", "loop": true },
+    "run": { "clip": "run", "loop": true },
+    "eat": { "clip": "eat", "loop": false },
+    "happy": { "clip": "dance", "loop": false },
+    "positive": { "clip": "gesture-positive", "loop": false },
+    "negative": { "clip": "gesture-negative", "loop": false },
+    "rest": { "clip": "static", "loop": true }
+  },
+  "events": {
+    "onClick": "happy",
+    "onChatOpen": "positive",
+    "onUserSendMessage": "idle",
+    "onAiReplyStart": "positive",
+    "onLongIdle": "rest"
+  }
+}
+

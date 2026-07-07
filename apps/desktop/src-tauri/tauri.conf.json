@@ -1,0 +1,47 @@
+{
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devPath": "http://127.0.0.1:5173",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "WorkBuddy",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": true
+    },
+    "bundle": {
+      "active": true,
+      "category": "Productivity",
+      "copyright": "Copyright (c) 2026 hillmanpick",
+      "identifier": "com.hillmanpick.workbuddy",
+      "targets": "all"
+    },
+    "security": {
+      "csp": null
+    },
+    "systemTray": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": false
+    },
+    "windows": [
+      {
+        "title": "WorkBuddy",
+        "width": 440,
+        "height": 680,
+        "minWidth": 360,
+        "minHeight": 520,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "resizable": true,
+        "skipTaskbar": false,
+        "center": true
+      }
+    ]
+  }
+}
+

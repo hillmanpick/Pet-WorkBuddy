@@ -1,23 +1,38 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+target/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+src-tauri/target/
+apps/**/dist/
+apps/**/src-tauri/target/
+
+# Tauri generated files
+apps/**/src-tauri/gen/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editors and OS files
 .vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
+.idea/
+.DS_Store
+Thumbs.db
+
+# WorkBuddy local runtime data
+.workbuddy/
+config.local.json
