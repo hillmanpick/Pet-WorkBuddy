@@ -18,7 +18,7 @@ pnpm desktop
 pnpm desktop:pack
 ```
 
-The generated package is written to `apps/desktop/release/`.
+The default package target is Tauri. Generated installers are written to `apps/desktop/src-tauri/target/release/bundle/`.
 
 ## Web Preview
 
@@ -26,12 +26,13 @@ The generated package is written to `apps/desktop/release/`.
 pnpm dev
 ```
 
-## Tauri Preview
+## Electron Fallback
 
-Install Rust first, then run:
+Electron remains available for machines without Rust:
 
 ```powershell
-pnpm tauri:dev
+pnpm electron:desktop
+pnpm electron:pack
 ```
 
 ## Build
@@ -40,15 +41,16 @@ pnpm tauri:dev
 pnpm build
 ```
 
-For desktop installers:
+For Tauri desktop installers:
 
 ```powershell
 pnpm desktop:pack
 ```
 
-Tauri builds are optional and require Rust plus MSVC Build Tools:
+Direct Tauri commands are also available:
 
 ```powershell
+pnpm tauri:dev
 pnpm tauri:build
 ```
 

@@ -49,4 +49,3 @@ pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
         _ => {}
     }
 }
-

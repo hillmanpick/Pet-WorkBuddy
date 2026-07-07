@@ -18,6 +18,9 @@
       "category": "Productivity",
       "copyright": "Copyright (c) 2026 hillmanpick",
       "identifier": "com.hillmanpick.workbuddy",
+      "icon": [
+        "icons/icon.ico"
+      ],
       "targets": "all"
     },
     "security": {
@@ -44,4 +47,3 @@
     ]
   }
 }
-

@@ -10,7 +10,7 @@ fn main() {
         .system_tray(tray::build_tray())
         .on_system_tray_event(tray::handle_tray_event)
         .setup(|app| {
-            shortcuts::register_default_shortcuts(app.handle())?;
+            shortcuts::register_default_shortcuts(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -26,4 +26,3 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("failed to run WorkBuddy");
 }
-

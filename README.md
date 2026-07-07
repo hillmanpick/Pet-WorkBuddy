@@ -4,14 +4,14 @@ WorkBuddy is an open-source AI desktop pet. It gives users a small animated comp
 
 ## Features
 
-- Transparent, always-on-top desktop pet window powered by Electron by default.
-- Optional Tauri source is kept for a lighter future desktop target.
+- Transparent, always-on-top desktop pet window powered by Tauri by default.
+- Optional Electron target is kept as a fallback for machines without a Rust toolchain.
 - React + TypeScript settings and chat interface.
 - Three.js GLB pet rendering with animation clip mapping.
 - Default CC0 pet packs from Kenney Cube Pets.
 - Configurable ChatGPT, Claude, and DeepSeek providers.
 - Editable model IDs, base URLs, temperature, max token limits, and system prompts.
-- User-owned API keys stored locally. Electron uses `safeStorage` when available; Tauri uses the OS keychain.
+- User-owned API keys stored locally. Tauri uses the OS keychain; Electron uses `safeStorage` when available.
 - Custom global shortcuts for chat, hiding the pet, centering the pet, and quick prompts.
 - Local quick commands with optional shortcuts.
 - Update, dev, build, and clean command files for Windows users.
@@ -42,7 +42,7 @@ Optional web UI preview:
 pnpm dev
 ```
 
-The default desktop target uses Electron so it can run without Rust. The Tauri source is also included for a lighter future target; Tauri builds require Rust and MSVC Build Tools.
+The default desktop target uses Tauri and requires Rust plus MSVC Build Tools. Electron is available as a fallback with `pnpm electron:desktop` and `pnpm electron:pack`.
 
 ## User Commands
 

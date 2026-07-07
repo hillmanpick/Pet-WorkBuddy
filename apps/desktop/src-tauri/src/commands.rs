@@ -6,7 +6,9 @@ fn secret_name(provider: &str) -> String {
 pub fn set_api_key(provider: String, api_key: String) -> Result<(), String> {
     let entry = keyring::Entry::new("WorkBuddy", &secret_name(&provider))
         .map_err(|error| error.to_string())?;
-    entry.set_password(&api_key).map_err(|error| error.to_string())
+    entry
+        .set_password(&api_key)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -31,4 +33,3 @@ pub fn delete_api_key(provider: String) -> Result<(), String> {
         Err(error) => Err(error.to_string()),
     }
 }
-

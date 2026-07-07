@@ -15,4 +15,3 @@ pub fn center_app_window(window: tauri::Window) -> Result<(), String> {
     window.show().map_err(|error| error.to_string())?;
     window.set_focus().map_err(|error| error.to_string())
 }
-

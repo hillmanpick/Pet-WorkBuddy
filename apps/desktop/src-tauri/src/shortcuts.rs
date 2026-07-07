@@ -6,15 +6,17 @@ fn register_named_shortcut(
     app: &tauri::AppHandle,
     name: &str,
     accelerator: &str,
-) -> Result<(), tauri::Error> {
+) -> Result<(), String> {
     let event_name = name.to_string();
     let handle = app.clone();
-    app.global_shortcut_manager().register(accelerator, move || {
-        let _ = handle.emit_all(SHORTCUT_EVENT, event_name.clone());
-    })
+    app.global_shortcut_manager()
+        .register(accelerator, move || {
+            let _ = handle.emit_all(SHORTCUT_EVENT, event_name.clone());
+        })
+        .map_err(|error| error.to_string())
 }
 
-pub fn register_default_shortcuts(app: tauri::AppHandle) -> Result<(), tauri::Error> {
+pub fn register_default_shortcuts(app: tauri::AppHandle) {
     let shortcuts = [
         ("toggleChat", "Ctrl+Alt+W"),
         ("hidePet", "Ctrl+Alt+H"),
@@ -25,8 +27,6 @@ pub fn register_default_shortcuts(app: tauri::AppHandle) -> Result<(), tauri::Er
     for (name, accelerator) in shortcuts {
         let _ = register_named_shortcut(&app, name, accelerator);
     }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -35,7 +35,7 @@ pub fn register_shortcut(
     name: String,
     accelerator: String,
 ) -> Result<(), String> {
-    register_named_shortcut(&app, &name, &accelerator).map_err(|error| error.to_string())
+    register_named_shortcut(&app, &name, &accelerator)
 }
 
 #[tauri::command]
@@ -44,4 +44,3 @@ pub fn unregister_shortcut(app: tauri::AppHandle, accelerator: String) -> Result
         .unregister(&accelerator)
         .map_err(|error| error.to_string())
 }
-

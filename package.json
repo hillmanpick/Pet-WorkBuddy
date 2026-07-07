@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "pnpm --filter @workbuddy/desktop dev",
     "build": "pnpm --filter @workbuddy/desktop build",
-    "desktop": "pnpm --filter @workbuddy/desktop electron:start",
-    "desktop:pack": "pnpm --filter @workbuddy/desktop electron:pack",
+    "desktop": "pnpm --filter @workbuddy/desktop tauri:dev",
+    "desktop:pack": "pnpm --filter @workbuddy/desktop tauri:build",
+    "electron:desktop": "pnpm --filter @workbuddy/desktop electron:start",
+    "electron:pack": "pnpm --filter @workbuddy/desktop electron:pack",
     "preview": "pnpm --filter @workbuddy/desktop preview",
     "tauri:dev": "pnpm --filter @workbuddy/desktop tauri:dev",
     "tauri:build": "pnpm --filter @workbuddy/desktop tauri:build",
