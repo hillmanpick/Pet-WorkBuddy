@@ -469,7 +469,7 @@ button {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid rgba(35, 48, 58, 0.1);
@@ -691,6 +691,77 @@ button {
   grid-column: 1 / -1;
 }
 
+.chat-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-history-day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-history-day h4 {
+  margin: 0;
+  color: #53736b;
+  font-size: 12px;
+}
+
+.chat-history-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-history-message {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid rgba(35, 48, 58, 0.1);
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.chat-history-message.user {
+  border-color: rgba(46, 111, 115, 0.24);
+  background: #eef7f5;
+}
+
+.chat-history-message.assistant {
+  border-color: rgba(103, 120, 126, 0.18);
+  background: #ffffff;
+}
+
+.chat-history-message header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #52616b;
+  font-size: 11px;
+}
+
+.chat-history-message strong {
+  color: #24313a;
+}
+
+.chat-history-message time {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-history-message p {
+  margin: 0;
+  color: #24313a;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .status-bar {
   display: none;
 }
@@ -713,6 +784,10 @@ button {
   .settings-panel {
     width: calc(100% - 16px);
     height: calc(100% - 16px);
+  }
+
+  .tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .settings-grid,

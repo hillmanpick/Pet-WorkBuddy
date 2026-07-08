@@ -26,8 +26,11 @@ export type ShortcutConfig = {
   quickAsk: string;
 };
 
+export type ComputerAuthorizationMode = "fullAccess" | "confirmSensitive" | "denySensitive";
+
 export type ComputerControlConfig = {
   enabled: boolean;
+  authorizationMode: ComputerAuthorizationMode;
   requireConfirmation: boolean;
   allowWechatSend: boolean;
 };

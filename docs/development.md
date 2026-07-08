@@ -36,6 +36,13 @@ Supported actions:
 
 Keep user confirmation in the frontend before invoking these actions. Message sending and other high-impact actions should keep a second confirmation step.
 
+Computer task plans carry a `sensitivity` field:
+
+- `normal`: can run automatically in the default authorization mode.
+- `sensitive`: requires user approval in the default mode, runs automatically in full-access mode, and is blocked in deny-sensitive mode.
+
+Current sensitive tasks include WeChat sending flows and folder organization.
+
 The frontend rule parser currently recognizes simple tasks such as:
 
 - Open apps: WeChat, File Explorer, Notepad, Calculator, Paint, Windows Settings, screenshot tool.

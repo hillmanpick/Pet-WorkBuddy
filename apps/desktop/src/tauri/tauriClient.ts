@@ -27,8 +27,8 @@ function windowSizeForMode(mode: DesktopWindowMode, petSize: number) {
   return { width: Math.max(320, petSize + 120), height: Math.max(330, petSize + 138) };
 }
 
-function visibleStripForPet(petSize: number) {
-  return Math.round(60 + petSize / 3);
+export function visibleStripForPet(petSize: number) {
+  return Math.round(112 + petSize * 0.5);
 }
 
 export async function listenTauriEvent<T>(
@@ -117,6 +117,7 @@ export async function snapWindowToScreenEdge(visible = 124): Promise<void> {
 
   const position = await appWindow.outerPosition();
   const size = await appWindow.outerSize();
+  const visibleSize = Math.max(visible, Math.round(Math.min(size.width, size.height) * 0.45));
   const area = {
     x: monitor.position.x,
     y: monitor.position.y,
@@ -129,10 +130,10 @@ export async function snapWindowToScreenEdge(visible = 124): Promise<void> {
 
   let x = position.x;
   let y = position.y;
-  if (tucked.edge === "left") x = area.x - size.width + visible;
-  if (tucked.edge === "right") x = area.x + area.width - visible;
-  if (tucked.edge === "top") y = area.y - size.height + visible;
-  if (tucked.edge === "bottom") y = area.y + area.height - visible;
+  if (tucked.edge === "left") x = area.x - size.width + visibleSize;
+  if (tucked.edge === "right") x = area.x + area.width - visibleSize;
+  if (tucked.edge === "top") y = area.y - size.height + visibleSize;
+  if (tucked.edge === "bottom") y = area.y + area.height - visibleSize;
 
   await appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
 }
@@ -205,6 +206,59 @@ export async function showAppWindow(): Promise<void> {
 export async function centerAppWindow(): Promise<void> {
   if (!isTauriRuntime()) return;
   await invokeCommand("center_app_window");
+}
+
+export async function walkAppWindowRandomly(
+  durationMs = 4200,
+  onMoveStart?: (movement: { dx: number; dy: number }) => void,
+): Promise<{ dx: number; dy: number } | null> {
+  if (!isTauriRuntime()) return null;
+
+  const { appWindow, currentMonitor, PhysicalPosition } = await import("@tauri-apps/api/window");
+  const monitor = await currentMonitor();
+  if (!monitor) return null;
+
+  const start = await appWindow.outerPosition();
+  const size = await appWindow.outerSize();
+  const margin = 24;
+  const minX = monitor.position.x + margin;
+  const maxX = monitor.position.x + monitor.size.width - size.width - margin;
+  const minY = monitor.position.y + margin;
+  const maxY = monitor.position.y + monitor.size.height - size.height - margin;
+  if (maxX <= minX || maxY <= minY) return null;
+
+  const target = {
+    x: Math.round(minX + Math.random() * (maxX - minX)),
+    y: Math.round(minY + Math.random() * (maxY - minY)),
+  };
+  const movement = {
+    dx: target.x - start.x,
+    dy: target.y - start.y,
+  };
+  const startedAt = performance.now();
+
+  await appWindow.show();
+  onMoveStart?.(movement);
+
+  await new Promise<void>((resolve) => {
+    const tick = () => {
+      const progress = Math.min(1, (performance.now() - startedAt) / durationMs);
+      const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      const x = Math.round(start.x + (target.x - start.x) * eased);
+      const y = Math.round(start.y + (target.y - start.y) * eased);
+      void appWindow.setPosition(new PhysicalPosition(x, y));
+
+      if (progress < 1) {
+        window.setTimeout(tick, 30);
+      } else {
+        resolve();
+      }
+    };
+
+    tick();
+  });
+
+  return movement;
 }
 
 export async function getLaunchOnStartup(): Promise<boolean> {

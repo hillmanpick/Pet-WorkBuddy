@@ -12,6 +12,8 @@ export type ComputerAction =
   | { type: "key"; key: string }
   | { type: "wait"; ms: number };
 
+export type TaskSensitivity = "normal" | "sensitive";
+
 export type LocalTask = {
   type: "reminder";
   message: string;
@@ -22,11 +24,13 @@ export type ComputerTaskPlan = {
   id: string;
   title: string;
   summary: string;
+  sensitivity: TaskSensitivity;
   steps: string[];
   actions: ComputerAction[];
   localTask?: LocalTask;
   finalTitle?: string;
   finalSummary?: string;
+  finalSensitivity?: TaskSensitivity;
   finalActions?: ComputerAction[];
 };
 
@@ -127,6 +131,7 @@ function createOpenAppPlan(app: AppAlias, language: UiLanguage): ComputerTaskPla
     id: crypto.randomUUID(),
     title: zh ? `打开${appName}` : `Open ${appName}`,
     summary: zh ? `启动 ${appName}` : `Launch ${appName}`,
+    sensitivity: "normal",
     steps: [zh ? `启动 ${appName}` : `Launch ${appName}`],
     actions: [{ type: "open_app", app: app.app }],
   };
@@ -139,6 +144,7 @@ function createOpenFolderPlan(folder: FolderAlias, language: UiLanguage): Comput
     id: crypto.randomUUID(),
     title: zh ? `打开${folderName}` : `Open ${folderName}`,
     summary: zh ? `打开 ${folderName}` : `Open ${folderName}`,
+    sensitivity: "normal",
     steps: [zh ? "用资源管理器打开文件夹" : "Open the folder in File Explorer"],
     actions: [{ type: "open_folder", folder: folder.folder }],
   };
@@ -153,6 +159,7 @@ function createOrganizeFolderPlan(folder: FolderAlias, language: UiLanguage): Co
     summary: zh
       ? `把 ${folderName} 第一层文件按类型移动到 WorkBuddy Organized`
       : `Move top-level files in ${folderName} into WorkBuddy Organized by type`,
+    sensitivity: "sensitive",
     steps: zh
       ? [
           `扫描 ${folderName} 第一层文件`,
@@ -174,6 +181,7 @@ function createOpenUrlPlan(url: string, language: UiLanguage): ComputerTaskPlan 
     id: crypto.randomUUID(),
     title: zh ? "打开网页" : "Open website",
     summary: zh ? `打开 ${url}` : `Open ${url}`,
+    sensitivity: "normal",
     steps: [zh ? "用系统默认浏览器打开网页" : "Open the URL in the default browser"],
     actions: [{ type: "open_url", url }],
   };
@@ -190,6 +198,7 @@ function createSearchPlan(query: string, engine: "bing" | "baidu", language: UiL
     id: crypto.randomUUID(),
     title: zh ? "搜索网页" : "Search the web",
     summary: zh ? `用 ${engineName} 搜索：${shorten(query)}` : `Search ${engineName}: ${shorten(query)}`,
+    sensitivity: "normal",
     steps: [zh ? "打开浏览器搜索结果页" : "Open the search results in the browser"],
     actions: [{ type: "open_url", url }],
   };
@@ -201,6 +210,7 @@ function createCopyPlan(text: string, language: UiLanguage): ComputerTaskPlan {
     id: crypto.randomUUID(),
     title: zh ? "复制文字" : "Copy text",
     summary: zh ? `复制到剪贴板：${shorten(text)}` : `Copy to clipboard: ${shorten(text)}`,
+    sensitivity: "normal",
     steps: [zh ? "把文字写入系统剪贴板" : "Put the text on the system clipboard"],
     actions: [{ type: "set_clipboard", text }],
   };
@@ -212,6 +222,7 @@ function createPastePlan(text: string, language: UiLanguage): ComputerTaskPlan {
     id: crypto.randomUUID(),
     title: zh ? "输入文字" : "Paste text",
     summary: zh ? `向当前光标位置输入：${shorten(text)}` : `Paste at the current cursor: ${shorten(text)}`,
+    sensitivity: "normal",
     steps: [
       zh
         ? "把文字复制到剪贴板并粘贴到当前光标位置"
@@ -227,6 +238,7 @@ function createNotePlan(text: string, language: UiLanguage): ComputerTaskPlan {
     id: crypto.randomUUID(),
     title: zh ? "新建笔记" : "Create note",
     summary: zh ? `打开记事本并写入：${shorten(text)}` : `Open Notepad and write: ${shorten(text)}`,
+    sensitivity: "normal",
     steps: zh ? ["打开记事本", "输入笔记内容"] : ["Open Notepad", "Enter the note text"],
     actions: [
       { type: "open_app", app: "notepad" },
@@ -247,6 +259,7 @@ function createWechatMessagePlan(
     summary: zh
       ? `准备给 ${contact} 发微信：${shorten(message)}`
       : `Prepare a WeChat message to ${contact}: ${shorten(message)}`,
+    sensitivity: "sensitive",
     steps: zh
       ? ["打开微信", `搜索联系人：${contact}`, "输入消息内容", "发送前再次确认"]
       : ["Open WeChat", `Search contact: ${contact}`, "Enter the message", "Confirm once more before sending"],
@@ -265,6 +278,7 @@ function createWechatMessagePlan(
     finalSummary: zh
       ? `消息已经填好。确认后会按 Enter 发送给 ${contact}。`
       : `The message is filled in. Confirm to press Enter and send it to ${contact}.`,
+    finalSensitivity: "sensitive",
     finalActions: [{ type: "key", key: "enter" }],
   };
 }
@@ -276,6 +290,7 @@ function createReminderPlan(message: string, delayMs: number, language: UiLangua
     id: crypto.randomUUID(),
     title: zh ? "设置提醒" : "Set reminder",
     summary: zh ? `${delayText} 后提醒：${shorten(message)}` : `Remind in ${delayText}: ${shorten(message)}`,
+    sensitivity: "normal",
     steps: [zh ? "在 WorkBuddy 本地创建倒计时提醒" : "Create a local WorkBuddy countdown reminder"],
     actions: [],
     localTask: {

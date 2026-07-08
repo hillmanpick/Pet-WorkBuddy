@@ -1,6 +1,7 @@
 import type { ChatMessage } from "../config/schema";
 
 const CHAT_KEY = "workbuddy.chat.messages";
+const CHAT_LIMIT = 500;
 
 export function loadChatHistory(): ChatMessage[] {
   const raw = localStorage.getItem(CHAT_KEY);
@@ -14,6 +15,5 @@ export function loadChatHistory(): ChatMessage[] {
 }
 
 export function saveChatHistory(messages: ChatMessage[]): void {
-  localStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-80)));
+  localStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-CHAT_LIMIT)));
 }
-

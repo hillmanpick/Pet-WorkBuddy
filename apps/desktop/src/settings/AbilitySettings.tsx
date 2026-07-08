@@ -60,14 +60,31 @@ export function AbilitySettings({ config, labels, onConfigChange }: AbilitySetti
           />
           <span>{labels.enableComputerControl}</span>
         </label>
-        <label className="toggle-field">
-          <input
-            type="checkbox"
-            checked={config.computerControl.requireConfirmation}
-            onChange={(event) => updateComputerControl({ requireConfirmation: event.target.checked })}
-          />
-          <span>{labels.requireConfirmation}</span>
+
+        <label className="field">
+          <span>{labels.authorizationMode}</span>
+          <select
+            value={config.computerControl.authorizationMode}
+            onChange={(event) =>
+              updateComputerControl({
+                authorizationMode: event.target.value as WorkBuddyConfig["computerControl"]["authorizationMode"],
+              })
+            }
+          >
+            <option value="confirmSensitive">{labels.confirmSensitive}</option>
+            <option value="fullAccess">{labels.fullAccess}</option>
+            <option value="denySensitive">{labels.denySensitive}</option>
+          </select>
         </label>
+
+        <p className="settings-note">
+          {config.computerControl.authorizationMode === "fullAccess"
+            ? labels.fullAccessDescription
+            : config.computerControl.authorizationMode === "denySensitive"
+              ? labels.denySensitiveDescription
+              : labels.confirmSensitiveDescription}
+        </p>
+
         <label className="toggle-field">
           <input
             type="checkbox"

@@ -71,11 +71,12 @@ export const defaultConfig: WorkBuddyConfig = {
   behavior: {
     startHidden: false,
     launchOnStartup: false,
-    longIdleMinutes: 12,
+    longIdleMinutes: 5,
     mousePassthrough: false,
   },
   computerControl: {
     enabled: true,
+    authorizationMode: "confirmSensitive",
     requireConfirmation: true,
     allowWechatSend: true,
   },

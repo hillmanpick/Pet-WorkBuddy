@@ -7,6 +7,7 @@ import {
   DirectionalLight,
   PerspectiveCamera,
   Scene,
+  Group,
   SRGBColorSpace,
   Vector3,
   WebGLRenderer,
@@ -19,11 +20,30 @@ import { PetActionPlayer } from "./PetActionPlayer";
 type PetRendererProps = {
   pack: LoadedPetPack | null;
   action: string;
+  actionToken: number;
+  rotationYaw: number;
+  autoRotate?: boolean;
 };
 
-export function PetRenderer({ pack, action }: PetRendererProps) {
+export function PetRenderer({ pack, action, actionToken, rotationYaw, autoRotate = true }: PetRendererProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PetActionPlayer | null>(null);
+  const modelRef = useRef<Group | null>(null);
+  const rotationRef = useRef(rotationYaw);
+  const actionRef = useRef(action);
+  const autoRotateRef = useRef(autoRotate);
+
+  useEffect(() => {
+    rotationRef.current = rotationYaw;
+  }, [rotationYaw]);
+
+  useEffect(() => {
+    actionRef.current = action;
+  }, [action]);
+
+  useEffect(() => {
+    autoRotateRef.current = autoRotate;
+  }, [autoRotate]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -72,6 +92,7 @@ export function PetRenderer({ pack, action }: PetRendererProps) {
       model.position.y -= 0.15;
 
       scene.add(model);
+      modelRef.current = model;
 
       const realMixer = new AnimationMixer(model);
       mixer = realMixer;
@@ -88,7 +109,19 @@ export function PetRenderer({ pack, action }: PetRendererProps) {
     resize();
 
     renderer.setAnimationLoop(() => {
-      mixer?.update(clock.getDelta());
+      const delta = clock.getDelta();
+      mixer?.update(delta);
+
+      const model = modelRef.current;
+      if (model) {
+        if (autoRotateRef.current) {
+          rotationRef.current += delta * 0.35;
+        }
+        const isWalking = actionRef.current === "walk" || actionRef.current === "run";
+        model.rotation.y = rotationRef.current;
+        model.position.y = -0.15 + (isWalking ? Math.sin(performance.now() / 135) * 0.025 : 0);
+      }
+
       renderer.render(scene, camera);
     });
 
@@ -98,13 +131,14 @@ export function PetRenderer({ pack, action }: PetRendererProps) {
       resizeObserver.disconnect();
       renderer.dispose();
       scene.clear();
+      modelRef.current = null;
       playerRef.current = null;
     };
   }, [pack]);
 
   useEffect(() => {
     playerRef.current?.play(action);
-  }, [action]);
+  }, [action, actionToken]);
 
   return <div className="pet-renderer" ref={containerRef} />;
 }

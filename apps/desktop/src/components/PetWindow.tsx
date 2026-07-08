@@ -1,13 +1,21 @@
 import { EyeOff, MessageCircle, MoreHorizontal, PanelBottomClose, Settings } from "lucide-react";
-import type { CSSProperties } from "react";
+import { useRef, type CSSProperties, type PointerEvent } from "react";
 import type { Translations } from "../i18n";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
 import { PetRenderer } from "../pet/PetRenderer";
-import { armWindowEdgeSnap, peekWindowFromScreenEdge, startWindowDrag } from "../tauri/tauriClient";
+import {
+  armWindowEdgeSnap,
+  peekWindowFromScreenEdge,
+  snapWindowToScreenEdge,
+  startWindowDrag,
+  visibleStripForPet,
+} from "../tauri/tauriClient";
 
 type PetWindowProps = {
   pack: LoadedPetPack | null;
   action: string;
+  actionToken: number;
+  rotationYaw: number;
   bubble?: string;
   labels: Translations["pet"];
   petSize: number;
@@ -16,6 +24,7 @@ type PetWindowProps = {
   onOpenChat: () => void;
   onOpenSettings: () => void;
   onHide: () => void;
+  onRotatePet: (delta: number) => void;
   onToggleToolbar: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -24,6 +33,8 @@ type PetWindowProps = {
 export function PetWindow({
   pack,
   action,
+  actionToken,
+  rotationYaw,
   bubble,
   labels,
   petSize,
@@ -32,14 +43,49 @@ export function PetWindow({
   onOpenChat,
   onOpenSettings,
   onHide,
+  onRotatePet,
   onToggleToolbar,
   onDragStart,
   onDragEnd,
 }: PetWindowProps) {
+  const dragTimerRef = useRef<number | null>(null);
+  const dragStartedRef = useRef(false);
+
   async function beginDrag() {
+    dragStartedRef.current = true;
     onDragStart();
-    await armWindowEdgeSnap(petSize);
-    await startWindowDrag().finally(onDragEnd);
+    const cleanupEdgeSnap = await armWindowEdgeSnap(petSize);
+    await startWindowDrag().finally(() => {
+      cleanupEdgeSnap();
+      void snapWindowToScreenEdge(visibleStripForPet(petSize));
+      onDragEnd();
+    });
+  }
+
+  function clearDragTimer() {
+    if (dragTimerRef.current) {
+      window.clearTimeout(dragTimerRef.current);
+      dragTimerRef.current = null;
+    }
+  }
+
+  function handlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    dragStartedRef.current = false;
+    clearDragTimer();
+    dragTimerRef.current = window.setTimeout(() => {
+      dragTimerRef.current = null;
+      void beginDrag();
+    }, 180);
+  }
+
+  function handlePointerUp() {
+    const wasDragging = dragStartedRef.current;
+    clearDragTimer();
+    dragStartedRef.current = false;
+    if (!wasDragging) {
+      onClickPet();
+    }
   }
 
   return (
@@ -54,13 +100,24 @@ export function PetWindow({
         className="pet-stage"
         type="button"
         title={labels.drag}
-        onClick={onClickPet}
-        onPointerDown={(event) => {
-          if (event.button !== 0) return;
-          void beginDrag();
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={() => {
+          clearDragTimer();
+          dragStartedRef.current = false;
+        }}
+        onWheel={(event) => {
+          event.preventDefault();
+          onRotatePet(event.deltaY > 0 ? 0.35 : -0.35);
         }}
       >
-        <PetRenderer pack={pack} action={action} />
+        <PetRenderer
+          pack={pack}
+          action={action}
+          actionToken={actionToken}
+          rotationYaw={rotationYaw}
+          autoRotate={action !== "walk" && action !== "run"}
+        />
       </button>
 
       {toolbarHidden ? (

@@ -25,9 +25,9 @@ import {
   isTauriRuntime,
   listenTauriEvent,
   openSettingsWindow,
-  peekWindowFromScreenEdge,
   setDesktopWindowMode,
   showAppWindow,
+  walkAppWindowRandomly,
 } from "../tauri/tauriClient";
 import {
   matchesShortcut,
@@ -45,6 +45,37 @@ import {
 
 type Panel = "none" | "chat" | "settings";
 const CONFIG_CHANNEL = "workbuddy.config";
+const PET_IDLE_WALK_MS = 5 * 60 * 1000;
+
+function randomFrom<T>(items: readonly T[]): T | undefined {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function yawForMovement(dx: number, dy: number): number {
+  if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return 0;
+  return Math.atan2(dx, dy);
+}
+
+function authorizationMode(config: WorkBuddyConfig) {
+  return config.computerControl.authorizationMode ?? (config.computerControl.requireConfirmation ? "confirmSensitive" : "fullAccess");
+}
+
+function isSensitiveComputerPhase(plan: ComputerTaskPlan, phase: ComputerTaskPhase): boolean {
+  return phase === "final"
+    ? (plan.finalSensitivity ?? plan.sensitivity) === "sensitive"
+    : plan.sensitivity === "sensitive";
+}
+
+function shouldAutoRunComputerPhase(config: WorkBuddyConfig, plan: ComputerTaskPlan, phase: ComputerTaskPhase): boolean {
+  const mode = authorizationMode(config);
+  if (mode === "fullAccess") return true;
+  if (mode === "denySensitive") return !isSensitiveComputerPhase(plan, phase);
+  return !isSensitiveComputerPhase(plan, phase);
+}
+
+function shouldBlockComputerPhase(config: WorkBuddyConfig, plan: ComputerTaskPlan, phase: ComputerTaskPhase): boolean {
+  return authorizationMode(config) === "denySensitive" && isSensitiveComputerPhase(plan, phase);
+}
 
 function publishConfig(config: WorkBuddyConfig) {
   if (!("BroadcastChannel" in window)) return;
@@ -86,6 +117,8 @@ function PetApp() {
   const [petPack, setPetPack] = useState<LoadedPetPack | null>(null);
   const [petCatalog, setPetCatalog] = useState<LoadedPetPack[]>([]);
   const [petAction, setPetAction] = useState("idle");
+  const [petActionToken, setPetActionToken] = useState(0);
+  const [petRotationYaw, setPetRotationYaw] = useState(0);
   const [bubble, setBubble] = useState<string | undefined>(
     translations[defaultConfig.appearance.language].pet.greeting,
   );
@@ -100,6 +133,11 @@ function PetApp() {
   const [status, setStatus] = useState("Ready");
   const loadedRef = useRef(false);
   const reminderTimersRef = useRef<number[]>([]);
+  const bubbleTimerRef = useRef<number | null>(null);
+  const actionTimerRef = useRef<number | null>(null);
+  const lastPetInteractionAtRef = useRef(Date.now());
+  const lastClickActionRef = useRef<string | null>(null);
+  const idleWalkRunningRef = useRef(false);
   const labels = translations[config.appearance.language];
 
   const updateConfig = useCallback((next: WorkBuddyConfig) => {
@@ -108,26 +146,105 @@ function PetApp() {
     publishConfig(next);
   }, []);
 
+  const clearActionTimer = useCallback(() => {
+    if (actionTimerRef.current) {
+      window.clearTimeout(actionTimerRef.current);
+      actionTimerRef.current = null;
+    }
+  }, []);
+
+  const clearBubbleTimer = useCallback(() => {
+    if (bubbleTimerRef.current) {
+      window.clearTimeout(bubbleTimerRef.current);
+      bubbleTimerRef.current = null;
+    }
+  }, []);
+
+  const playPetAction = useCallback(
+    (action: string) => {
+      clearActionTimer();
+      setPetAction(action);
+      setPetActionToken((value) => value + 1);
+    },
+    [clearActionTimer],
+  );
+
+  const showBubble = useCallback(
+    (text?: string, duration = 3500) => {
+      clearBubbleTimer();
+      setBubble(text);
+      if (!text) return;
+
+      bubbleTimerRef.current = window.setTimeout(() => {
+        bubbleTimerRef.current = null;
+        setBubble(undefined);
+      }, duration);
+    },
+    [clearBubbleTimer],
+  );
+
+  const scheduleIdleAction = useCallback(
+    (delay = 2400) => {
+      clearActionTimer();
+      actionTimerRef.current = window.setTimeout(() => {
+        actionTimerRef.current = null;
+        setPetAction(randomIdleAction(petPack));
+        setPetActionToken((value) => value + 1);
+      }, delay);
+    },
+    [clearActionTimer, petPack],
+  );
+
   const triggerPet = useCallback(
     (event: PetEvent, overrideBubble?: string, duration = 3500) => {
       const next = nextPetAction(petPack, event);
-      setPetAction(next.action);
-      setBubble(overrideBubble ?? next.bubble);
-      window.setTimeout(() => setBubble(undefined), duration);
+      playPetAction(next.action);
+      showBubble(overrideBubble ?? next.bubble, duration);
+      if (next.action !== "idle" && next.action !== "walk" && next.action !== "run") {
+        scheduleIdleAction(Math.min(duration, 3200));
+      }
     },
-    [petPack],
+    [petPack, playPetAction, scheduleIdleAction, showBubble],
   );
 
   const playPetClickAction = useCallback(() => {
-    const candidates = ["happy", "positive", "eat", "run", "walk", "idle"].filter(
+    lastPetInteractionAtRef.current = Date.now();
+    const candidates = ["happy", "positive", "eat", "run", "walk", "negative", "idle"].filter(
       (action) => petPack?.animations[action],
     );
-    const action = candidates[Math.floor(Math.random() * candidates.length)] ?? petPack?.defaultAnimation ?? "idle";
-    setPetAction(action);
-    setBubble(labels.pet.clicked);
-    window.setTimeout(() => setBubble(undefined), 1800);
-    window.setTimeout(() => setPetAction(randomIdleAction(petPack)), 2200);
-  }, [labels.pet.clicked, petPack]);
+    const freshCandidates = candidates.filter((action) => action !== lastClickActionRef.current);
+    const action =
+      randomFrom(freshCandidates.length ? freshCandidates : candidates) ?? petPack?.defaultAnimation ?? "idle";
+    const phrase = randomFrom(labels.pet.clickPhrases) ?? labels.pet.clicked;
+
+    lastClickActionRef.current = action;
+    playPetAction(action);
+    showBubble(phrase, 2400);
+    setPetRotationYaw((value) => value + (Math.random() > 0.5 ? 0.85 : -0.85));
+    scheduleIdleAction(action === "walk" || action === "run" ? 2600 : 2200);
+  }, [labels.pet.clickPhrases, labels.pet.clicked, petPack, playPetAction, scheduleIdleAction, showBubble]);
+
+  const startIdleWalk = useCallback(async () => {
+    if (idleWalkRunningRef.current || busy || panel !== "none") return;
+    idleWalkRunningRef.current = true;
+    lastPetInteractionAtRef.current = Date.now();
+
+    const action = petPack?.animations.walk ? "walk" : petPack?.animations.run ? "run" : randomIdleAction(petPack);
+    playPetAction(action);
+    showBubble(randomFrom(labels.pet.idlePhrases), 3600);
+
+    try {
+      const movement = await walkAppWindowRandomly(5200, ({ dx, dy }) => {
+        setPetRotationYaw(yawForMovement(dx, dy));
+      });
+      if (movement) {
+        setPetRotationYaw(yawForMovement(movement.dx, movement.dy));
+      }
+    } finally {
+      idleWalkRunningRef.current = false;
+      scheduleIdleAction(700);
+    }
+  }, [busy, labels.pet.idlePhrases, panel, petPack, playPetAction, scheduleIdleAction, showBubble]);
 
   const openChat = useCallback(() => {
     setPanel("chat");
@@ -164,6 +281,13 @@ function PetApp() {
     async (plan: ComputerTaskPlan, phase: ComputerTaskPhase) => {
       if (busy) return;
 
+      if (shouldBlockComputerPhase(config, plan, phase)) {
+        setComputerTask(null);
+        setStatus("Ready");
+        triggerPet("onError", labels.computer.sensitiveDenied, 7000);
+        return;
+      }
+
       if (phase === "prepare" && plan.localTask?.type === "reminder") {
         setBusy(true);
         const { message, delayMs } = plan.localTask;
@@ -193,14 +317,23 @@ function PetApp() {
         await executeComputerActions(actions);
 
         if (phase === "prepare" && plan.finalActions?.length) {
-          if (config.computerControl.allowWechatSend) {
-            setComputerTask({ plan, phase: "final" });
-            setStatus("Waiting for final confirmation");
-            triggerPet("onAiReplyEnd", labels.computer.readyToSend, 9000);
-          } else {
+          if (!config.computerControl.allowWechatSend) {
             setComputerTask(null);
             setStatus("Ready");
             triggerPet("onAiReplyEnd", labels.computer.manualSend, 9000);
+          } else if (shouldBlockComputerPhase(config, plan, "final")) {
+            setComputerTask(null);
+            setStatus("Ready");
+            triggerPet("onError", labels.computer.sensitiveDenied, 7000);
+          } else if (shouldAutoRunComputerPhase(config, plan, "final")) {
+            await executeComputerActions(plan.finalActions);
+            setComputerTask(null);
+            setStatus("Ready");
+            triggerPet("onAiReplyEnd", labels.computer.done, 5200);
+          } else {
+            setComputerTask({ plan, phase: "final" });
+            setStatus("Waiting for final confirmation");
+            triggerPet("onAiReplyEnd", labels.computer.readyToSend, 9000);
           }
           return;
         }
@@ -218,13 +351,14 @@ function PetApp() {
     },
     [
       busy,
-      config.computerControl.allowWechatSend,
+      config,
       labels.computer.done,
       labels.computer.manualSend,
       labels.computer.readyToSend,
       labels.computer.reminderDue,
       labels.computer.reminderSet,
       labels.computer.running,
+      labels.computer.sensitiveDenied,
       triggerPet,
     ],
   );
@@ -249,6 +383,15 @@ function PetApp() {
           return;
         }
 
+        if (shouldBlockComputerPhase(config, taskPlan, "prepare")) {
+          const assistantMessage = createMessage("assistant", labels.computer.sensitiveDenied);
+          const finalMessages = [...nextMessages, assistantMessage];
+          setMessages(finalMessages);
+          saveChatHistory(finalMessages);
+          triggerPet("onError", labels.computer.sensitiveDenied, 7000);
+          return;
+        }
+
         const assistantMessage = createMessage("assistant", `${labels.computer.detected}: ${taskPlan.summary}`);
         const finalMessages = [...nextMessages, assistantMessage];
         setMessages(finalMessages);
@@ -256,10 +399,11 @@ function PetApp() {
         setPanel("chat");
         setFocusToken((value) => value + 1);
         setComputerTask({ plan: taskPlan, phase: "prepare" });
-        triggerPet("onChatOpen", labels.computer.needConfirm, 7000);
 
-        if (!config.computerControl.requireConfirmation) {
+        if (shouldAutoRunComputerPhase(config, taskPlan, "prepare")) {
           void runComputerTask(taskPlan, "prepare");
+        } else {
+          triggerPet("onChatOpen", labels.computer.needConfirm, 7000);
         }
         return;
       }
@@ -294,6 +438,7 @@ function PetApp() {
       labels.computer.detected,
       labels.computer.disabled,
       labels.computer.needConfirm,
+      labels.computer.sensitiveDenied,
       labels.pet.apiKeyNeeded,
       labels.pet.done,
       labels.pet.thinking,
@@ -394,19 +539,28 @@ function PetApp() {
     void loadPetPackById(config.activePetId)
       .then((pack) => {
         setPetPack(pack);
-        setPetAction(pack.defaultAnimation);
+        playPetAction(pack.defaultAnimation);
       })
       .catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
-  }, [config.activePetId]);
+  }, [config.activePetId, playPetAction]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (!busy && panel === "none") {
-        setPetAction(randomIdleAction(petPack));
+      if (!busy && panel === "none" && !idleWalkRunningRef.current) {
+        playPetAction(randomIdleAction(petPack));
       }
     }, 9000);
     return () => window.clearInterval(timer);
-  }, [busy, panel, petPack]);
+  }, [busy, panel, petPack, playPetAction]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastPetInteractionAtRef.current >= PET_IDLE_WALK_MS) {
+        void startIdleWalk();
+      }
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [startIdleWalk]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -416,8 +570,10 @@ function PetApp() {
   useEffect(() => {
     return () => {
       reminderTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      clearBubbleTimer();
+      clearActionTimer();
     };
-  }, []);
+  }, [clearActionTimer, clearBubbleTimer]);
 
   useEffect(() => {
     const mode = panel === "chat" ? "chat" : "pet";
@@ -484,11 +640,14 @@ function PetApp() {
       <PetWindow
         pack={petPack}
         action={petAction}
+        actionToken={petActionToken}
+        rotationYaw={petRotationYaw}
         bubble={bubble}
         labels={labels.pet}
         petSize={config.appearance.petSize}
         toolbarHidden={toolbarHidden}
         onClickPet={() => {
+          lastPetInteractionAtRef.current = Date.now();
           if (toolbarHidden) {
             setToolbarHidden(false);
             return;
@@ -498,9 +657,19 @@ function PetApp() {
         onOpenChat={toggleChat}
         onOpenSettings={openSettings}
         onHide={hidePet}
+        onRotatePet={(delta) => {
+          lastPetInteractionAtRef.current = Date.now();
+          setPetRotationYaw((value) => value + delta);
+        }}
         onToggleToolbar={() => setToolbarHidden((value) => !value)}
-        onDragStart={() => triggerPet("onDragStart")}
-        onDragEnd={() => triggerPet("onDragEnd")}
+        onDragStart={() => {
+          lastPetInteractionAtRef.current = Date.now();
+          triggerPet("onDragStart");
+        }}
+        onDragEnd={() => {
+          lastPetInteractionAtRef.current = Date.now();
+          triggerPet("onDragEnd");
+        }}
       />
 
       {panel === "chat" ? (
