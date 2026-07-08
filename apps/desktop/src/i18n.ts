@@ -4,6 +4,7 @@ export const translations = {
   zh: {
     pet: {
       drag: "拖动 WorkBuddy",
+      rotate: "旋转宠物",
       openChat: "打开聊天",
       openSettings: "设置",
       hidePet: "隐藏宠物",
@@ -34,10 +35,18 @@ export const translations = {
     computer: {
       title: "电脑任务",
       detected: "已识别电脑任务",
+      planning: "我在规划电脑操作...",
+      planningFailed: "Agent 规划失败",
+      checking: "我在检查执行结果...",
+      continuing: "还差一步，我继续处理。",
       needConfirm: "我准备好了，确认后再操作电脑。",
       disabled: "电脑操作功能已关闭，可以到设置里打开。",
       running: "正在操作电脑...",
       done: "任务完成。",
+      failed: "任务失败",
+      needsUser: "需要你接手",
+      notVerified: "我已经执行了操作，但还不能确认任务完成",
+      iterationLimit: "我已经连续处理了多轮，但还不能可靠确认完成。请你看一下当前电脑状态，我不会把它标记成已完成。",
       cancelled: "已取消任务。",
       sensitiveDenied: "这个任务包含敏感操作，当前授权模式不允许执行。",
       readyToSend: "消息已经填好，确认后我再发送。",
@@ -125,6 +134,7 @@ export const translations = {
   en: {
     pet: {
       drag: "Drag WorkBuddy",
+      rotate: "Rotate pet",
       openChat: "Open chat",
       openSettings: "Settings",
       hidePet: "Hide pet",
@@ -155,10 +165,18 @@ export const translations = {
     computer: {
       title: "Computer task",
       detected: "Computer task detected",
+      planning: "Planning computer actions...",
+      planningFailed: "Agent planning failed",
+      checking: "Checking the result...",
+      continuing: "One more step; continuing.",
       needConfirm: "I'm ready. Confirm before I operate the computer.",
       disabled: "Computer control is disabled. You can enable it in settings.",
       running: "Operating the computer...",
       done: "Task complete.",
+      failed: "Task failed",
+      needsUser: "Needs your help",
+      notVerified: "I ran the actions, but cannot confirm the task is complete",
+      iterationLimit: "I tried multiple rounds but still cannot reliably confirm completion. Please check the current computer state; I will not mark it complete.",
       cancelled: "Task cancelled.",
       sensitiveDenied: "This task contains sensitive actions and is blocked by the current authorization mode.",
       readyToSend: "The message is filled in. Confirm before I send it.",

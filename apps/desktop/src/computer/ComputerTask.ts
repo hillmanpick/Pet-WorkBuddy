@@ -5,9 +5,11 @@ export type ComputerAction =
   | { type: "open_app"; app: string }
   | { type: "open_folder"; folder: string }
   | { type: "organize_folder"; folder: string }
+  | { type: "create_word_document"; app: "wps_writer" | "word"; text: string }
   | { type: "open_url"; url: string }
   | { type: "set_clipboard"; text: string }
   | { type: "paste_text"; text: string }
+  | { type: "shell_command"; command: string }
   | { type: "hotkey"; keys: string[] }
   | { type: "key"; key: string }
   | { type: "wait"; ms: number };
@@ -20,6 +22,10 @@ export type LocalTask = {
   delayMs: number;
 };
 
+export type AgentTaskState = {
+  userTask: string;
+};
+
 export type ComputerTaskPlan = {
   id: string;
   title: string;
@@ -27,6 +33,8 @@ export type ComputerTaskPlan = {
   sensitivity: TaskSensitivity;
   steps: string[];
   actions: ComputerAction[];
+  completionMode?: "verified" | "needs_user_check";
+  agentTask?: AgentTaskState;
   localTask?: LocalTask;
   finalTitle?: string;
   finalSummary?: string;
@@ -34,7 +42,7 @@ export type ComputerTaskPlan = {
   finalActions?: ComputerAction[];
 };
 
-type ActionResult = {
+export type ActionResult = {
   index: number;
   ok: boolean;
   message: string;
@@ -61,6 +69,8 @@ type ParsedWechatMessage = {
 
 const appAliases: AppAlias[] = [
   { keys: ["微信", "wechat", "weixin", "wx"], app: "wechat", zh: "微信", en: "WeChat" },
+  { keys: ["wps", "wps office", "金山文档", "wps文字"], app: "wps_writer", zh: "WPS", en: "WPS Writer" },
+  { keys: ["word", "microsoft word", "winword"], app: "word", zh: "Word", en: "Word" },
   { keys: ["资源管理器", "文件管理器", "explorer", "file explorer", "files"], app: "explorer", zh: "资源管理器", en: "File Explorer" },
   { keys: ["记事本", "notepad"], app: "notepad", zh: "记事本", en: "Notepad" },
   { keys: ["计算器", "calculator", "calc"], app: "calculator", zh: "计算器", en: "Calculator" },
@@ -89,6 +99,9 @@ export function createComputerTaskPlan(text: string, language: UiLanguage): Comp
   const wechatMessage = parseWechatMessage(prompt);
   if (wechatMessage) return createWechatMessagePlan(wechatMessage, language);
 
+  const blankWordDocument = parseBlankWordDocument(prompt, language);
+  if (blankWordDocument) return blankWordDocument;
+
   const note = parseNote(prompt);
   if (note) return createNotePlan(note, language);
 
@@ -112,6 +125,19 @@ export function createComputerTaskPlan(text: string, language: UiLanguage): Comp
 
   const app = findOpenApp(prompt);
   if (app) return createOpenAppPlan(app, language);
+
+  return null;
+}
+
+export function createPriorityComputerTaskPlan(text: string, language: UiLanguage): ComputerTaskPlan | null {
+  const prompt = text.trim();
+  if (!prompt) return null;
+
+  const search = parseSearch(prompt);
+  if (search) return createSearchPlan(search.query, search.engine, language);
+
+  const url = parseOpenUrl(prompt);
+  if (url) return createOpenUrlPlan(url, language);
 
   return null;
 }
@@ -184,6 +210,7 @@ function createOpenUrlPlan(url: string, language: UiLanguage): ComputerTaskPlan 
     sensitivity: "normal",
     steps: [zh ? "用系统默认浏览器打开网页" : "Open the URL in the default browser"],
     actions: [{ type: "open_url", url }],
+    completionMode: "needs_user_check",
   };
 }
 
@@ -201,6 +228,7 @@ function createSearchPlan(query: string, engine: "bing" | "baidu", language: UiL
     sensitivity: "normal",
     steps: [zh ? "打开浏览器搜索结果页" : "Open the search results in the browser"],
     actions: [{ type: "open_url", url }],
+    completionMode: "needs_user_check",
   };
 }
 
@@ -245,6 +273,43 @@ function createNotePlan(text: string, language: UiLanguage): ComputerTaskPlan {
       { type: "wait", ms: 600 },
       { type: "paste_text", text },
     ],
+  };
+}
+
+function createBlankWordDocumentPlan(
+  app: { id: "wps_writer" | "word"; zh: string; en: string },
+  language: UiLanguage,
+  content?: string,
+): ComputerTaskPlan {
+  const zh = language === "zh";
+  const appName = zh ? app.zh : app.en;
+  const documentText = content?.trim() ? content : "";
+  const hasContent = documentText.length > 0;
+  return {
+    id: crypto.randomUUID(),
+    title: hasContent
+      ? zh
+        ? "新建 Word 文档并写入内容"
+        : "Create Word document with content"
+      : zh
+        ? "新建空白 Word 文档"
+        : "Create blank Word document",
+    summary: hasContent
+      ? zh
+        ? `打开 ${appName} 并在 Word 文档中写入：${shorten(documentText)}`
+        : `Open ${appName}, create a Word document, and write: ${shorten(documentText)}`
+      : zh
+        ? `打开 ${appName} 并新建空白 Word 文档`
+        : `Open ${appName} and create a blank Word document`,
+    sensitivity: "normal",
+    steps: hasContent
+      ? zh
+        ? ["创建一个 Word 文档", `写入：${shorten(documentText)}`, `用 ${appName} 打开文档`]
+        : ["Create a Word document", `Write: ${shorten(documentText)}`, `Open the document with ${appName}`]
+      : zh
+        ? ["创建一个空白 Word 文档", `用 ${appName} 打开文档`]
+        : ["Create a blank Word document", `Open the document with ${appName}`],
+    actions: [{ type: "create_word_document", app: app.id, text: documentText }],
   };
 }
 
@@ -310,6 +375,9 @@ function parseOpenUrl(text: string): string | null {
 function parseSearch(text: string): { query: string; engine: "bing" | "baidu" } | null {
   const trimmed = text.trim();
   const patterns = [
+    /^(?:帮我|请)?(?:打开|启动)?(?:默认)?(?:浏览器)?(?:并|然后|后)?(?:进入|打开|访问)?\s*(百度|baidu|必应|bing|谷歌|google)(?:[，,。.]|然后|并|后|\s)*(?:搜索|搜一下|查询|查一下|search|look up)\s*[:：,， ]?\s*(.+)$/i,
+    /^(?:帮我|请)?(?:在|用)\s*(百度|baidu|必应|bing|谷歌|google)\s*(?:搜索|搜一下|查询|查一下|search|look up)\s*[:：,， ]?\s*(.+)$/i,
+    /^(百度|baidu|必应|bing|谷歌|google)\s*(?:搜索|搜一下|查询|查一下|search|look up)\s*[:：,， ]?\s*(.+)$/i,
     /^(?:帮我|请)?(?:搜索|搜一下|查一下|查询)\s*[:：,， ]\s*(.+)$/i,
     /^(?:search|look up|google|bing)\s+(.+)$/i,
     /^百度\s*[:：,， ]?\s*(.+)$/i,
@@ -318,9 +386,11 @@ function parseSearch(text: string): { query: string; engine: "bing" | "baidu" } 
   for (const pattern of patterns) {
     const match = trimmed.match(pattern);
     if (!match) continue;
-    const query = cleanMessage(match[1]);
+    const hasExplicitEngine = match.length >= 3;
+    const engineText = hasExplicitEngine ? match[1] : trimmed;
+    const query = cleanMessage(hasExplicitEngine ? match[2] : match[1]);
     if (!query || /^https?:\/\//i.test(query)) return null;
-    const engine = /^百度/.test(trimmed) ? "baidu" : "bing";
+    const engine = /(百度|baidu)/i.test(engineText) ? "baidu" : "bing";
     return { query, engine };
   }
 
@@ -348,6 +418,83 @@ function parseWechatMessage(text: string): ParsedWechatMessage | null {
   }
 
   return null;
+}
+
+function parseBlankWordDocument(text: string, language: UiLanguage): ComputerTaskPlan | null {
+  const normalized = text.toLocaleLowerCase();
+  const mentionsDocument = /(wps|word|winword|docx?|文档|文字)/i.test(normalized);
+  const wantsBlank = /(空白|新建|创建|生成|建一个|blank|new|create)/i.test(normalized);
+  const wantsAction = /(打开|启动|唤起|open|launch|start|生成|新建|创建|create|new)/i.test(normalized);
+  if (!mentionsDocument || !wantsBlank || !wantsAction) return null;
+
+  const prefersWps = /(wps|金山)/i.test(normalized);
+  const app = prefersWps
+    ? { id: "wps_writer" as const, zh: "WPS", en: "WPS Writer" }
+    : { id: "word" as const, zh: "Word", en: "Word" };
+  return createBlankWordDocumentPlan(app, language, parseDocumentInput(text));
+}
+
+function parseDocumentInput(text: string): string | undefined {
+  const requestedArticle = parseGeneratedArticleRequest(text);
+  if (requestedArticle) return requestedArticle;
+
+  const patterns = [
+    /(?:输入|写入|打字|键入|type|paste)\s*[:：,， ]?\s*(.+)$/i,
+    /(?:在\s*(?:word|wps|文档|文字).*?)(?:写|输入)\s*[:：,， ]?\s*(.+)$/i,
+    /(?:内容|文字)\s*(?:是|为|:|：)\s*(.+)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const value = cleanMessage(match[1]);
+    if (value) return value;
+  }
+
+  return undefined;
+}
+
+function parseGeneratedArticleRequest(text: string): string | undefined {
+  const normalized = text.replace(/\s+/g, "");
+  const wantsArticle = /(写|撰写|生成|随便写).*(文章|作文|短文|小作文)/i.test(normalized);
+  if (!wantsArticle) return undefined;
+
+  const topic =
+    text.match(/(?:关于|有关|围绕)\s*([^，。,.!?！？]+?)\s*(?:的)?(?:文章|作文|短文|小作文)/i)?.[1]?.trim() ??
+    text.match(/(?:写|撰写|生成)\s*(?:一篇)?\s*([^，。,.!?！？]+?)\s*(?:的)?(?:文章|作文|短文|小作文)/i)?.[1]?.trim();
+
+  const cleanTopic = topic && !/(随便|一篇|一个|篇|文章|作文|短文|小作文)/.test(topic) ? topic : undefined;
+  return generatedArticle(cleanTopic);
+}
+
+function generatedArticle(topic?: string): string {
+  if (topic) {
+    return [
+      `${topic}`,
+      "",
+      `关于${topic}，最重要的是看到它和日常生活之间的联系。很多事情看起来离我们很远，但真正落到行动里，往往都由一个清晰的目标、一次认真的选择和持续的执行组成。`,
+      "",
+      `如果想把${topic}做好，不能只停留在想法上。我们需要先弄清楚问题是什么，再把目标拆成可以完成的小步骤。这样既能减少犹豫，也能让每一次努力都有方向。`,
+      "",
+      `当然，过程里也会遇到变化和困难。真正有效的方法不是回避问题，而是在反馈中调整节奏。只要愿意持续观察、总结和改进，很多看似复杂的事情都会慢慢变得可控。`,
+      "",
+      `所以，${topic}并不是一个空洞的概念。它提醒我们，在面对任务和生活时，要保持耐心、判断力和行动力。把每一步做好，结果自然会变得更踏实。`,
+    ].join("\n");
+  }
+
+  return [
+    "把普通的一天过好",
+    "",
+    "很多时候，我们总觉得真正重要的生活应该发生在某个特别的时刻。可是回头看，决定一个人状态的，往往不是那些突然出现的大事，而是每天重复的小选择。",
+    "",
+    "把普通的一天过好，首先要知道自己正在做什么。早上醒来时，可以给今天定一个简单的重点，不必太宏大，只要足够明确。比如完成一项工作、整理一个角落、认真读几页书，或者和重要的人好好说几句话。",
+    "",
+    "其次，要允许事情不完全按照计划发生。计划的意义不是把一天锁死，而是在变化出现时，仍然知道自己可以回到哪里。遇到打断时，不必急着责怪自己，只要重新开始，很多事情就还来得及。",
+    "",
+    "最后，要给自己一点收尾的时间。晚上回顾今天，不是为了挑错，而是为了看见已经完成的部分。哪怕只是很小的一步，也说明这一天没有白白过去。",
+    "",
+    "生活的质量，常常藏在这些普通的细节里。认真对待每一天，并不是要把自己逼得很紧，而是愿意用稳定的行动，把日子一点点过得更清楚、更踏实。",
+  ].join("\n");
 }
 
 function parseNote(text: string): string | null {

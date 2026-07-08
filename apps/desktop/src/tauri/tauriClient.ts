@@ -28,7 +28,7 @@ function windowSizeForMode(mode: DesktopWindowMode, petSize: number) {
 }
 
 export function visibleStripForPet(petSize: number) {
-  return Math.round(112 + petSize * 0.5);
+  return Math.round(Math.max(72, petSize * 0.48));
 }
 
 export async function listenTauriEvent<T>(
@@ -95,29 +95,52 @@ export async function closeCurrentWindow(): Promise<void> {
   await appWindow.close();
 }
 
-function nearestEdge(
+function petVisualBounds(
+  windowSize: { width: number; height: number },
+  petSize: number,
+  scaleFactor: number,
+) {
+  const pet = petSize * scaleFactor;
+  const petShell = (petSize + 92) * scaleFactor;
+  const sideInset = Math.max(0, (windowSize.width - petShell) / 2) + 46 * scaleFactor;
+  const topInset = 46 * scaleFactor;
+
+  return {
+    left: sideInset,
+    right: sideInset + pet,
+    top: topInset,
+    bottom: topInset + pet,
+    size: pet,
+  };
+}
+
+function nearestPetEdge(
   position: { x: number; y: number },
-  size: { width: number; height: number },
+  bounds: { left: number; right: number; top: number; bottom: number },
   area: { x: number; y: number; width: number; height: number },
 ): { edge: ScreenEdge; value: number } {
   return [
-    { edge: "left" as const, value: Math.abs(position.x - area.x) },
-    { edge: "right" as const, value: Math.abs(area.x + area.width - (position.x + size.width)) },
-    { edge: "top" as const, value: Math.abs(position.y - area.y) },
-    { edge: "bottom" as const, value: Math.abs(area.y + area.height - (position.y + size.height)) },
+    { edge: "left" as const, value: Math.abs(position.x + bounds.left - area.x) },
+    { edge: "right" as const, value: Math.abs(area.x + area.width - (position.x + bounds.right)) },
+    { edge: "top" as const, value: Math.abs(position.y + bounds.top - area.y) },
+    { edge: "bottom" as const, value: Math.abs(area.y + area.height - (position.y + bounds.bottom)) },
   ].sort((a, b) => a.value - b.value)[0];
 }
 
-export async function snapWindowToScreenEdge(visible = 124): Promise<void> {
-  if (!isTauriRuntime()) return;
+export async function snapWindowToScreenEdge(
+  visible = 92,
+  petSize = 190,
+): Promise<ScreenEdge | null> {
+  if (!isTauriRuntime()) return null;
 
   const { appWindow, currentMonitor, PhysicalPosition } = await import("@tauri-apps/api/window");
   const monitor = await currentMonitor();
-  if (!monitor) return;
+  if (!monitor) return null;
 
   const position = await appWindow.outerPosition();
   const size = await appWindow.outerSize();
-  const visibleSize = Math.max(visible, Math.round(Math.min(size.width, size.height) * 0.45));
+  const scaleFactor = monitor.scaleFactor || 1;
+  const bounds = petVisualBounds(size, petSize, scaleFactor);
   const area = {
     x: monitor.position.x,
     y: monitor.position.y,
@@ -125,20 +148,23 @@ export async function snapWindowToScreenEdge(visible = 124): Promise<void> {
     height: monitor.size.height,
   };
 
-  const tucked = nearestEdge(position, size, area);
-  if (tucked.value > 28) return;
+  const tucked = nearestPetEdge(position, bounds, area);
+  const snapTolerance = Math.max(42, petSize * 0.38 * scaleFactor);
+  if (tucked.value > snapTolerance) return null;
+  const visibleSize = visible * scaleFactor;
 
   let x = position.x;
   let y = position.y;
-  if (tucked.edge === "left") x = area.x - size.width + visibleSize;
-  if (tucked.edge === "right") x = area.x + area.width - visibleSize;
-  if (tucked.edge === "top") y = area.y - size.height + visibleSize;
-  if (tucked.edge === "bottom") y = area.y + area.height - visibleSize;
+  if (tucked.edge === "left") x = area.x - bounds.left - bounds.size + visibleSize;
+  if (tucked.edge === "right") x = area.x + area.width + bounds.size - visibleSize - bounds.right;
+  if (tucked.edge === "top") y = area.y - bounds.top - bounds.size + visibleSize;
+  if (tucked.edge === "bottom") y = area.y + area.height + bounds.size - visibleSize - bounds.bottom;
 
   await appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
+  return tucked.edge;
 }
 
-export async function peekWindowFromScreenEdge(): Promise<void> {
+export async function peekWindowFromScreenEdge(petSize = 190): Promise<void> {
   if (!isTauriRuntime()) return;
 
   const { appWindow, currentMonitor, PhysicalPosition } = await import("@tauri-apps/api/window");
@@ -147,6 +173,9 @@ export async function peekWindowFromScreenEdge(): Promise<void> {
 
   const position = await appWindow.outerPosition();
   const size = await appWindow.outerSize();
+  const scaleFactor = monitor.scaleFactor || 1;
+  const bounds = petVisualBounds(size, petSize, scaleFactor);
+  const margin = 4 * scaleFactor;
   const area = {
     x: monitor.position.x,
     y: monitor.position.y,
@@ -156,10 +185,10 @@ export async function peekWindowFromScreenEdge(): Promise<void> {
 
   let x = position.x;
   let y = position.y;
-  if (position.x < area.x) x = area.x;
-  if (position.x + size.width > area.x + area.width) x = area.x + area.width - size.width;
-  if (position.y < area.y) y = area.y;
-  if (position.y + size.height > area.y + area.height) y = area.y + area.height - size.height;
+  if (position.x + bounds.left < area.x) x = area.x - bounds.left + margin;
+  if (position.x + bounds.right > area.x + area.width) x = area.x + area.width - bounds.right - margin;
+  if (position.y + bounds.top < area.y) y = area.y - bounds.top + margin;
+  if (position.y + bounds.bottom > area.y + area.height) y = area.y + area.height - bounds.bottom - margin;
 
   if (x !== position.x || y !== position.y) {
     await appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
@@ -185,7 +214,7 @@ export async function armWindowEdgeSnap(petSize = 190): Promise<EventUnlisten> {
     window.clearTimeout(timer);
     timer = window.setTimeout(() => {
       cleanup();
-      void snapWindowToScreenEdge(visible);
+      void snapWindowToScreenEdge(visible, petSize);
     }, 240);
   });
 

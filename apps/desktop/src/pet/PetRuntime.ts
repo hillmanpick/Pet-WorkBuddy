@@ -16,7 +16,6 @@ export function nextPetAction(pack: LoadedPetPack | null, event: PetEvent): Runt
 
 export function randomIdleAction(pack: LoadedPetPack | null): string {
   if (!pack) return "idle";
-  const candidates = ["idle", "walk", "happy", "positive"].filter((action) => pack.animations[action]);
+  const candidates = ["idle", "positive"].filter((action) => pack.animations[action]);
   return candidates[Math.floor(Math.random() * candidates.length)] ?? pack.defaultAnimation;
 }
-

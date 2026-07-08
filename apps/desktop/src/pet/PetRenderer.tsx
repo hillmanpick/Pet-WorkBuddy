@@ -25,7 +25,7 @@ type PetRendererProps = {
   autoRotate?: boolean;
 };
 
-export function PetRenderer({ pack, action, actionToken, rotationYaw, autoRotate = true }: PetRendererProps) {
+export function PetRenderer({ pack, action, actionToken, rotationYaw, autoRotate = false }: PetRendererProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PetActionPlayer | null>(null);
   const modelRef = useRef<Group | null>(null);

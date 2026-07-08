@@ -6,8 +6,18 @@ import { PetWindow } from "../components/PetWindow";
 import { SettingsWindow } from "../components/SettingsWindow";
 import type { ComputerTaskPhase } from "../components/ComputerTaskPanel";
 import {
+  continueAgentTaskPlan,
+  createAgentTaskPlan,
+  isAgentTaskPlan,
+  looksLikeComputerRequest,
+  type AgentActionObservation,
+} from "../computer/ComputerAgent";
+import {
   createComputerTaskPlan,
+  createPriorityComputerTaskPlan,
   executeComputerActions,
+  type ActionResult,
+  type ComputerAction,
   type ComputerTaskPlan,
 } from "../computer/ComputerTask";
 import { translations } from "../i18n";
@@ -46,6 +56,7 @@ import {
 type Panel = "none" | "chat" | "settings";
 const CONFIG_CHANNEL = "workbuddy.config";
 const PET_IDLE_WALK_MS = 5 * 60 * 1000;
+const AGENT_MAX_ITERATIONS = 3;
 
 function randomFrom<T>(items: readonly T[]): T | undefined {
   return items[Math.floor(Math.random() * items.length)];
@@ -75,6 +86,26 @@ function shouldAutoRunComputerPhase(config: WorkBuddyConfig, plan: ComputerTaskP
 
 function shouldBlockComputerPhase(config: WorkBuddyConfig, plan: ComputerTaskPlan, phase: ComputerTaskPhase): boolean {
   return authorizationMode(config) === "denySensitive" && isSensitiveComputerPhase(plan, phase);
+}
+
+function firstFailedAction(results: ActionResult[]): ActionResult | undefined {
+  return results.find((result) => !result.ok);
+}
+
+function assertComputerActionsSucceeded(results: ActionResult[]): void {
+  const failed = firstFailedAction(results);
+  if (failed) throw new Error(failed.message);
+}
+
+function actionObservations(
+  iteration: number,
+  actions: ComputerAction[],
+  results: ActionResult[],
+): AgentActionObservation[] {
+  return results.flatMap((result) => {
+    const action = actions[result.index] ?? actions[0];
+    return action ? [{ iteration, action, result }] : [];
+  });
 }
 
 function publishConfig(config: WorkBuddyConfig) {
@@ -144,6 +175,14 @@ function PetApp() {
     setConfig(next);
     void saveConfig(next);
     publishConfig(next);
+  }, []);
+
+  const appendAssistantMessage = useCallback((content: string) => {
+    setMessages((current) => {
+      const nextMessages = [...current, createMessage("assistant", content)];
+      saveChatHistory(nextMessages);
+      return nextMessages;
+    });
   }, []);
 
   const clearActionTimer = useCallback(() => {
@@ -220,7 +259,6 @@ function PetApp() {
     lastClickActionRef.current = action;
     playPetAction(action);
     showBubble(phrase, 2400);
-    setPetRotationYaw((value) => value + (Math.random() > 0.5 ? 0.85 : -0.85));
     scheduleIdleAction(action === "walk" || action === "run" ? 2600 : 2200);
   }, [labels.pet.clickPhrases, labels.pet.clicked, petPack, playPetAction, scheduleIdleAction, showBubble]);
 
@@ -284,6 +322,7 @@ function PetApp() {
       if (shouldBlockComputerPhase(config, plan, phase)) {
         setComputerTask(null);
         setStatus("Ready");
+        appendAssistantMessage(labels.computer.sensitiveDenied);
         triggerPet("onError", labels.computer.sensitiveDenied, 7000);
         return;
       }
@@ -298,6 +337,7 @@ function PetApp() {
         reminderTimersRef.current.push(timer);
         setComputerTask(null);
         setStatus("Ready");
+        appendAssistantMessage(`${labels.computer.reminderSet}: ${message}`);
         triggerPet("onAiReplyEnd", labels.computer.reminderSet, 5200);
         setBusy(false);
         return;
@@ -306,6 +346,7 @@ function PetApp() {
       const actions = phase === "final" ? plan.finalActions ?? [] : plan.actions;
       if (!actions.length) {
         setComputerTask(null);
+        appendAssistantMessage(labels.computer.done);
         return;
       }
 
@@ -314,36 +355,138 @@ function PetApp() {
       triggerPet("onUserSendMessage", labels.computer.running);
 
       try {
-        await executeComputerActions(actions);
+        const results = await executeComputerActions(actions);
+
+        if (isAgentTaskPlan(plan) && phase === "prepare") {
+          let currentPlan = plan;
+          let observations = actionObservations(1, actions, results);
+
+          for (let iteration = 1; iteration <= AGENT_MAX_ITERATIONS; iteration += 1) {
+            setStatus("Checking task");
+            triggerPet("onUserSendMessage", labels.computer.checking, 4200);
+
+            let review;
+            try {
+              review = await continueAgentTaskPlan(config, currentPlan, observations, messages);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              setComputerTask(null);
+              setStatus("Task needs review");
+              appendAssistantMessage(`${labels.computer.notVerified}: ${message}`);
+              triggerPet("onError", labels.computer.notVerified, 9000);
+              return;
+            }
+
+            if (review.status === "complete") {
+              setComputerTask(null);
+              setStatus("Ready");
+              appendAssistantMessage(`${labels.computer.done}: ${review.message}`);
+              triggerPet("onAiReplyEnd", review.message, 6200);
+              return;
+            }
+
+            if (review.status === "failed") {
+              setComputerTask(null);
+              setStatus("Task error");
+              appendAssistantMessage(`${labels.computer.failed}: ${review.message}`);
+              triggerPet("onError", review.message, 9000);
+              return;
+            }
+
+            if (review.status === "needs_user" || !review.plan) {
+              setComputerTask(null);
+              setStatus("Needs user");
+              appendAssistantMessage(`${labels.computer.needsUser}: ${review.message}`);
+              triggerPet("onAiReplyEnd", review.message, 9000);
+              return;
+            }
+
+            if (shouldBlockComputerPhase(config, review.plan, "prepare")) {
+              setComputerTask(null);
+              setStatus("Ready");
+              appendAssistantMessage(labels.computer.sensitiveDenied);
+              triggerPet("onError", labels.computer.sensitiveDenied, 7000);
+              return;
+            }
+
+            if (!shouldAutoRunComputerPhase(config, review.plan, "prepare")) {
+              setComputerTask({ plan: review.plan, phase: "prepare" });
+              setStatus("Waiting for confirmation");
+              appendAssistantMessage(`${labels.computer.needConfirm}: ${review.plan.summary}`);
+              triggerPet("onChatOpen", labels.computer.needConfirm, 8000);
+              return;
+            }
+
+            if (iteration >= AGENT_MAX_ITERATIONS) {
+              setComputerTask(null);
+              setStatus("Needs user");
+              appendAssistantMessage(labels.computer.iterationLimit);
+              triggerPet("onAiReplyEnd", labels.computer.iterationLimit, 9000);
+              return;
+            }
+
+            currentPlan = review.plan;
+            setStatus("Running follow-up task");
+            triggerPet("onUserSendMessage", labels.computer.continuing, 4200);
+            const nextResults = await executeComputerActions(currentPlan.actions);
+            observations = [
+              ...observations,
+              ...actionObservations(iteration + 1, currentPlan.actions, nextResults),
+            ];
+          }
+
+          setComputerTask(null);
+          setStatus("Needs user");
+          appendAssistantMessage(labels.computer.iterationLimit);
+          triggerPet("onAiReplyEnd", labels.computer.iterationLimit, 9000);
+          return;
+        }
+
+        assertComputerActionsSucceeded(results);
 
         if (phase === "prepare" && plan.finalActions?.length) {
           if (!config.computerControl.allowWechatSend) {
             setComputerTask(null);
             setStatus("Ready");
+            appendAssistantMessage(labels.computer.manualSend);
             triggerPet("onAiReplyEnd", labels.computer.manualSend, 9000);
           } else if (shouldBlockComputerPhase(config, plan, "final")) {
             setComputerTask(null);
             setStatus("Ready");
+            appendAssistantMessage(labels.computer.sensitiveDenied);
             triggerPet("onError", labels.computer.sensitiveDenied, 7000);
           } else if (shouldAutoRunComputerPhase(config, plan, "final")) {
-            await executeComputerActions(plan.finalActions);
+            const finalResults = await executeComputerActions(plan.finalActions);
+            assertComputerActionsSucceeded(finalResults);
             setComputerTask(null);
             setStatus("Ready");
+            appendAssistantMessage(`${labels.computer.done}: ${plan.summary}`);
             triggerPet("onAiReplyEnd", labels.computer.done, 5200);
           } else {
             setComputerTask({ plan, phase: "final" });
             setStatus("Waiting for final confirmation");
+            appendAssistantMessage(labels.computer.readyToSend);
             triggerPet("onAiReplyEnd", labels.computer.readyToSend, 9000);
           }
           return;
         }
 
+        if (phase === "prepare" && plan.completionMode === "needs_user_check") {
+          setComputerTask(null);
+          setStatus("Needs user check");
+          appendAssistantMessage(`${labels.computer.notVerified}: ${plan.summary}`);
+          triggerPet("onAiReplyEnd", labels.computer.notVerified, 7000);
+          return;
+        }
+
         setComputerTask(null);
         setStatus("Ready");
+        appendAssistantMessage(`${labels.computer.done}: ${plan.summary}`);
         triggerPet("onAiReplyEnd", labels.computer.done, 5200);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setStatus("Task error");
+        appendAssistantMessage(`${labels.computer.failed}: ${message}`);
         triggerPet("onError", message, 8000);
       } finally {
         setBusy(false);
@@ -351,14 +494,22 @@ function PetApp() {
     },
     [
       busy,
+      appendAssistantMessage,
       config,
       labels.computer.done,
+      labels.computer.failed,
+      labels.computer.checking,
+      labels.computer.continuing,
+      labels.computer.iterationLimit,
       labels.computer.manualSend,
+      labels.computer.needsUser,
       labels.computer.readyToSend,
       labels.computer.reminderDue,
       labels.computer.reminderSet,
       labels.computer.running,
+      labels.computer.notVerified,
       labels.computer.sensitiveDenied,
+      messages,
       triggerPet,
     ],
   );
@@ -372,7 +523,22 @@ function PetApp() {
       setMessages(nextMessages);
       saveChatHistory(nextMessages);
 
-      const taskPlan = createComputerTaskPlan(text, config.appearance.language);
+      let taskPlan: ComputerTaskPlan | null = null;
+      let agentPlanningError: string | null = null;
+
+      taskPlan = createPriorityComputerTaskPlan(text, config.appearance.language);
+
+      if (!taskPlan && config.computerControl.enabled && looksLikeComputerRequest(text)) {
+        setStatus("Planning task");
+        triggerPet("onUserSendMessage", labels.computer.planning, 5200);
+        try {
+          taskPlan = await createAgentTaskPlan(config, text, nextMessages);
+        } catch (error) {
+          agentPlanningError = error instanceof Error ? error.message : String(error);
+        }
+      }
+
+      taskPlan = taskPlan ?? createComputerTaskPlan(text, config.appearance.language);
       if (taskPlan) {
         if (!config.computerControl.enabled) {
           const assistantMessage = createMessage("assistant", labels.computer.disabled);
@@ -408,6 +574,16 @@ function PetApp() {
         return;
       }
 
+      if (agentPlanningError && looksLikeComputerRequest(text)) {
+        const assistantMessage = createMessage("assistant", `${labels.computer.planningFailed}: ${agentPlanningError}`);
+        const finalMessages = [...nextMessages, assistantMessage];
+        setMessages(finalMessages);
+        saveChatHistory(finalMessages);
+        triggerPet("onError", labels.computer.planningFailed, 7000);
+        setStatus("Planning error");
+        return;
+      }
+
       setBusy(true);
       setStatus("Thinking");
       triggerPet("onUserSendMessage", labels.pet.thinking);
@@ -438,6 +614,8 @@ function PetApp() {
       labels.computer.detected,
       labels.computer.disabled,
       labels.computer.needConfirm,
+      labels.computer.planning,
+      labels.computer.planningFailed,
       labels.computer.sensitiveDenied,
       labels.pet.apiKeyNeeded,
       labels.pet.done,
@@ -643,8 +821,11 @@ function PetApp() {
         actionToken={petActionToken}
         rotationYaw={petRotationYaw}
         bubble={bubble}
+        computerTask={computerTask}
+        computerLabels={labels.computer}
         labels={labels.pet}
         petSize={config.appearance.petSize}
+        busy={busy}
         toolbarHidden={toolbarHidden}
         onClickPet={() => {
           lastPetInteractionAtRef.current = Date.now();
@@ -657,6 +838,8 @@ function PetApp() {
         onOpenChat={toggleChat}
         onOpenSettings={openSettings}
         onHide={hidePet}
+        onConfirmComputerTask={confirmComputerTask}
+        onCancelComputerTask={cancelComputerTask}
         onRotatePet={(delta) => {
           lastPetInteractionAtRef.current = Date.now();
           setPetRotationYaw((value) => value + delta);
@@ -674,19 +857,10 @@ function PetApp() {
 
       {panel === "chat" ? (
         <ChatWindow
-          config={config}
-          messages={messages}
           busy={busy}
           focusToken={focusToken}
           labels={labels.chat}
-          computerLabels={labels.computer}
-          computerTask={computerTask}
           onSend={handleSend}
-          onRunQuickCommand={runQuickCommand}
-          onConfirmComputerTask={confirmComputerTask}
-          onCancelComputerTask={cancelComputerTask}
-          onOpenSettings={openSettings}
-          onClose={() => setPanel("none")}
         />
       ) : null}
 
