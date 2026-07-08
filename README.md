@@ -65,8 +65,8 @@ WorkBuddy 的目标是做一个开源的 AI 桌面伙伴：它既有类似桌面
 
 | Provider | 默认名称 | 默认模型 ID | 说明 |
 | --- | --- | --- | --- |
-| OpenAI-compatible | ChatGPT | `gpt-4.1-mini` | 支持 OpenAI 兼容 Chat Completions API |
-| Anthropic | Claude | `claude-sonnet-4` | 使用 Anthropic Messages API |
+| OpenAI-compatible | ChatGPT | `gpt-5.5` | 支持 OpenAI 兼容 Chat Completions API |
+| Anthropic | Claude | `claude-4.7` | 使用 Anthropic Messages API |
 | OpenAI-compatible | DeepSeek | `deepseek-v4-pro` | 支持 DeepSeek/OpenAI 兼容 API |
 
 所有模型 ID 都可以在设置里修改。WorkBuddy 不提供内置商业 API Key，用户需要自己配置。
@@ -293,8 +293,8 @@ It is not a web demo and not an Electron app. The desktop target is Tauri/Rust o
 
 | Provider | Default display name | Default model ID | Notes |
 | --- | --- | --- | --- |
-| OpenAI-compatible | ChatGPT | `gpt-4.1-mini` | Uses Chat Completions-compatible API |
-| Anthropic | Claude | `claude-sonnet-4` | Uses Anthropic Messages API |
+| OpenAI-compatible | ChatGPT | `gpt-5.5` | Uses Chat Completions-compatible API |
+| Anthropic | Claude | `claude-4.7` | Uses Anthropic Messages API |
 | OpenAI-compatible | DeepSeek | `deepseek-v4-pro` | Uses DeepSeek/OpenAI-compatible API |
 
 All model IDs are configurable in settings. WorkBuddy does not ship with commercial API keys.

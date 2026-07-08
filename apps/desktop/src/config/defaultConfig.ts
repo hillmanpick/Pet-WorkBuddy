@@ -9,7 +9,7 @@ export const defaultConfig: WorkBuddyConfig = {
       displayName: "ChatGPT",
       baseUrl: "https://api.openai.com/v1",
       apiKeyRef: "workbuddy.openai.api_key",
-      modelId: "gpt-4.1-mini",
+      modelId: "gpt-5.5",
       temperature: 0.7,
       maxTokens: 2048,
       systemPrompt:
@@ -20,7 +20,7 @@ export const defaultConfig: WorkBuddyConfig = {
       displayName: "Claude",
       baseUrl: "https://api.anthropic.com",
       apiKeyRef: "workbuddy.claude.api_key",
-      modelId: "claude-sonnet-4",
+      modelId: "claude-4.7",
       temperature: 0.7,
       maxTokens: 2048,
       systemPrompt:

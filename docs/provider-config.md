@@ -9,7 +9,7 @@ WorkBuddy supports configurable provider settings.
     "openai": {
       "displayName": "ChatGPT",
       "baseUrl": "https://api.openai.com/v1",
-      "modelId": "gpt-4.1-mini"
+      "modelId": "gpt-5.5"
     }
   }
 }
@@ -26,4 +26,3 @@ Users can edit:
 - System prompt
 
 API keys are stored in the OS keychain when running in Tauri. Browser preview mode stores test keys in local storage.
-
