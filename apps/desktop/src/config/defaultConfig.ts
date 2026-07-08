@@ -70,6 +70,7 @@ export const defaultConfig: WorkBuddyConfig = {
   },
   behavior: {
     startHidden: false,
+    launchOnStartup: false,
     longIdleMinutes: 12,
     mousePassthrough: false,
   },

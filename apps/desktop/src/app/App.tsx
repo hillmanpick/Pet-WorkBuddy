@@ -20,6 +20,7 @@ import type { PetEvent } from "../pet/PetStateMachine";
 import {
   centerAppWindow,
   closeCurrentWindow,
+  getLaunchOnStartup,
   hideAppWindow,
   isTauriRuntime,
   listenTauriEvent,
@@ -50,6 +51,24 @@ function publishConfig(config: WorkBuddyConfig) {
   const channel = new BroadcastChannel(CONFIG_CHANNEL);
   channel.postMessage(config);
   channel.close();
+}
+
+async function loadConfigWithStartupState(): Promise<WorkBuddyConfig> {
+  const nextConfig = await loadConfig();
+  if (!isTauriRuntime()) return nextConfig;
+
+  try {
+    const launchOnStartup = await getLaunchOnStartup();
+    return {
+      ...nextConfig,
+      behavior: {
+        ...nextConfig.behavior,
+        launchOnStartup,
+      },
+    };
+  } catch {
+    return nextConfig;
+  }
 }
 
 export function App() {
@@ -335,7 +354,7 @@ function PetApp() {
   );
 
   useEffect(() => {
-    void loadConfig().then(async (nextConfig) => {
+    void loadConfigWithStartupState().then(async (nextConfig) => {
       setConfig(nextConfig);
       setMessages(loadChatHistory());
       const providerIds = Object.keys(nextConfig.providers) as ProviderId[];
@@ -532,7 +551,7 @@ function SettingsApp() {
   }, []);
 
   useEffect(() => {
-    void loadConfig().then(async (nextConfig) => {
+    void loadConfigWithStartupState().then(async (nextConfig) => {
       setConfig(nextConfig);
       const providerIds = Object.keys(nextConfig.providers) as ProviderId[];
       const nextKeys: Partial<Record<ProviderId, string>> = {};

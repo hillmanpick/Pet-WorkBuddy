@@ -4,6 +4,7 @@ import { invokeCommand, isTauriRuntime } from "../tauri/tauriClient";
 export type ComputerAction =
   | { type: "open_app"; app: string }
   | { type: "open_folder"; folder: string }
+  | { type: "organize_folder"; folder: string }
   | { type: "open_url"; url: string }
   | { type: "set_clipboard"; text: string }
   | { type: "paste_text"; text: string }
@@ -99,6 +100,9 @@ export function createComputerTaskPlan(text: string, language: UiLanguage): Comp
   const url = parseOpenUrl(prompt);
   if (url) return createOpenUrlPlan(url, language);
 
+  const organizeFolder = findOrganizeFolder(prompt);
+  if (organizeFolder) return createOrganizeFolderPlan(organizeFolder, language);
+
   const folder = findOpenFolder(prompt);
   if (folder) return createOpenFolderPlan(folder, language);
 
@@ -137,6 +141,30 @@ function createOpenFolderPlan(folder: FolderAlias, language: UiLanguage): Comput
     summary: zh ? `打开 ${folderName}` : `Open ${folderName}`,
     steps: [zh ? "用资源管理器打开文件夹" : "Open the folder in File Explorer"],
     actions: [{ type: "open_folder", folder: folder.folder }],
+  };
+}
+
+function createOrganizeFolderPlan(folder: FolderAlias, language: UiLanguage): ComputerTaskPlan {
+  const zh = language === "zh";
+  const folderName = zh ? folder.zh : folder.en;
+  return {
+    id: crypto.randomUUID(),
+    title: zh ? `整理${folderName}` : `Organize ${folderName}`,
+    summary: zh
+      ? `把 ${folderName} 第一层文件按类型移动到 WorkBuddy Organized`
+      : `Move top-level files in ${folderName} into WorkBuddy Organized by type`,
+    steps: zh
+      ? [
+          `扫描 ${folderName} 第一层文件`,
+          "创建 WorkBuddy Organized 分类文件夹",
+          "按文件类型移动文件，重名文件自动加序号",
+        ]
+      : [
+          `Scan top-level files in ${folderName}`,
+          "Create WorkBuddy Organized category folders",
+          "Move files by type and auto-rename conflicts",
+        ],
+    actions: [{ type: "organize_folder", folder: folder.folder }],
   };
 }
 
@@ -357,6 +385,19 @@ function findOpenApp(text: string): AppAlias | null {
   if (!/(打开|启动|唤起|截图|截屏|open|launch|start|snip|screenshot)/i.test(text)) return null;
   const normalized = text.toLocaleLowerCase();
   return appAliases.find((item) => item.keys.some((key) => normalized.includes(key.toLocaleLowerCase()))) ?? null;
+}
+
+function findOrganizeFolder(text: string): FolderAlias | null {
+  if (!/(整理|归类|分类|收拾|organize|clean up|sort)/i.test(text)) return null;
+  const normalized = text.toLocaleLowerCase();
+  const matchedFolder =
+    folderAliases.find((item) => item.keys.some((key) => normalized.includes(key.toLocaleLowerCase()))) ?? null;
+
+  if (matchedFolder) return matchedFolder;
+  if (/(文档|documents|docs)/i.test(text)) return folderAliases.find((item) => item.folder === "documents") ?? null;
+  if (/(下载|downloads)/i.test(text)) return folderAliases.find((item) => item.folder === "downloads") ?? null;
+  if (/(桌面|desktop)/i.test(text)) return folderAliases.find((item) => item.folder === "desktop") ?? null;
+  return null;
 }
 
 function findOpenFolder(text: string): FolderAlias | null {

@@ -44,6 +44,7 @@ export type WorkBuddyConfig = {
   };
   behavior: {
     startHidden: boolean;
+    launchOnStartup: boolean;
     longIdleMinutes: number;
     mousePassthrough: boolean;
   };

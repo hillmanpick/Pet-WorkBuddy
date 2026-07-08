@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 pub enum ComputerAction {
     OpenApp { app: String },
     OpenFolder { folder: String },
+    OrganizeFolder { folder: String },
     OpenUrl { url: String },
     SetClipboard { text: String },
     PasteText { text: String },
@@ -55,6 +56,7 @@ fn run_action(action: ComputerAction) -> Result<(), String> {
     match action {
         ComputerAction::OpenApp { app } => open_app(&app),
         ComputerAction::OpenFolder { folder } => open_folder(&folder),
+        ComputerAction::OrganizeFolder { folder } => organize_folder(&folder),
         ComputerAction::OpenUrl { url } => open_url(&url),
         ComputerAction::SetClipboard { text } => set_clipboard_text(&text),
         ComputerAction::PasteText { text } => paste_text(&text),
@@ -101,6 +103,87 @@ fn open_folder(folder: &str) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|error| error.to_string())
+}
+
+fn organize_folder(folder: &str) -> Result<(), String> {
+    let source = folder_path(folder)?;
+    if !source.exists() {
+        return Err(format!("Folder does not exist: {}", source.display()));
+    }
+
+    let target_root = source.join("WorkBuddy Organized");
+    std::fs::create_dir_all(&target_root).map_err(|error| error.to_string())?;
+
+    let mut moved = 0usize;
+    for entry in std::fs::read_dir(&source).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        if moved >= 500 {
+            break;
+        }
+        if !path.is_file() {
+            continue;
+        }
+
+        let category = file_category(&path);
+        let category_dir = target_root.join(category);
+        std::fs::create_dir_all(&category_dir).map_err(|error| error.to_string())?;
+
+        let Some(file_name) = path.file_name() else {
+            continue;
+        };
+        let target = unique_target_path(&category_dir.join(file_name));
+        std::fs::rename(&path, &target).map_err(|error| error.to_string())?;
+        moved += 1;
+    }
+
+    Ok(())
+}
+
+fn file_category(path: &Path) -> &'static str {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    match extension.as_str() {
+        "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "txt" | "md" => "Documents",
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "svg" => "Images",
+        "mp4" | "mov" | "avi" | "mkv" | "webm" => "Videos",
+        "mp3" | "wav" | "flac" | "aac" | "m4a" => "Audio",
+        "zip" | "rar" | "7z" | "tar" | "gz" => "Archives",
+        "exe" | "msi" | "dmg" | "pkg" => "Installers",
+        "js" | "ts" | "tsx" | "jsx" | "rs" | "py" | "go" | "java" | "cs" | "cpp" | "c" | "h"
+        | "json" | "yaml" | "yml" | "toml" | "html" | "css" => "Code",
+        _ => "Other",
+    }
+}
+
+fn unique_target_path(target: &Path) -> PathBuf {
+    if !target.exists() {
+        return target.to_path_buf();
+    }
+
+    let parent = target.parent().unwrap_or_else(|| Path::new("."));
+    let stem = target
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("file");
+    let extension = target.extension().and_then(|value| value.to_str());
+
+    for index in 1..10_000 {
+        let file_name = match extension {
+            Some(extension) => format!("{} ({index}).{}", stem, extension),
+            None => format!("{} ({index})", stem),
+        };
+        let candidate = parent.join(file_name);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    target.to_path_buf()
 }
 
 fn folder_path(folder: &str) -> Result<PathBuf, String> {

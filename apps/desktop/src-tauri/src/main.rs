@@ -3,6 +3,7 @@
 mod commands;
 mod computer_control;
 mod shortcuts;
+mod startup;
 mod tray;
 mod window;
 
@@ -19,6 +20,8 @@ fn main() {
             commands::set_api_key,
             commands::delete_api_key,
             computer_control::execute_computer_actions,
+            startup::get_launch_on_startup,
+            startup::set_launch_on_startup,
             shortcuts::register_shortcut,
             shortcuts::unregister_shortcut,
             window::show_app_window,

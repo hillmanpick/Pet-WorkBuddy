@@ -1,5 +1,6 @@
 import type { WorkBuddyConfig } from "../config/schema";
 import type { Translations } from "../i18n";
+import { setLaunchOnStartup } from "../tauri/tauriClient";
 
 type AbilitySettingsProps = {
   config: WorkBuddyConfig;
@@ -18,8 +19,36 @@ export function AbilitySettings({ config, labels, onConfigChange }: AbilitySetti
     });
   }
 
+  function updateBehavior(value: Partial<WorkBuddyConfig["behavior"]>) {
+    const next = {
+      ...config,
+      behavior: {
+        ...config.behavior,
+        ...value,
+      },
+    };
+    onConfigChange(next);
+
+    if (typeof value.launchOnStartup === "boolean") {
+      void setLaunchOnStartup(value.launchOnStartup);
+    }
+  }
+
   return (
     <div className="settings-stack">
+      <section className="settings-group">
+        <h3>{labels.system}</h3>
+        <label className="toggle-field">
+          <input
+            type="checkbox"
+            checked={config.behavior.launchOnStartup}
+            onChange={(event) => updateBehavior({ launchOnStartup: event.target.checked })}
+          />
+          <span>{labels.launchOnStartup}</span>
+        </label>
+        <p className="settings-note">{labels.launchOnStartupNote}</p>
+      </section>
+
       <section className="settings-group">
         <h3>{labels.computerControl}</h3>
         <p className="settings-help">{labels.description}</p>

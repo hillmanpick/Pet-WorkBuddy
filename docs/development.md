@@ -28,6 +28,7 @@ Supported actions:
 
 - `open_app` for whitelisted apps.
 - `open_folder` for common user folders.
+- `organize_folder` for moving top-level files into `WorkBuddy Organized` by file type.
 - `open_url` for `http://` and `https://` URLs.
 - `set_clipboard` for copying text.
 - `paste_text` for clipboard-backed text input.
@@ -41,8 +42,17 @@ The frontend rule parser currently recognizes simple tasks such as:
 - Open folders: Desktop, Downloads, Documents, Pictures, Music, Videos, Home.
 - Open URLs and web searches.
 - Copy text, paste text, and create a Notepad note.
+- Folder organization for common user folders.
 - Local reminders/countdowns while the app is running.
 - Prepare WeChat messages with final send confirmation.
+
+Launch-on-startup is managed through the Windows current-user Run registry key:
+
+```text
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+```
+
+The related Tauri commands are `get_launch_on_startup` and `set_launch_on_startup`.
 
 ## Web Preview
 

@@ -206,3 +206,13 @@ export async function centerAppWindow(): Promise<void> {
   if (!isTauriRuntime()) return;
   await invokeCommand("center_app_window");
 }
+
+export async function getLaunchOnStartup(): Promise<boolean> {
+  if (!isTauriRuntime()) return false;
+  return invokeCommand<boolean>("get_launch_on_startup");
+}
+
+export async function setLaunchOnStartup(enabled: boolean): Promise<void> {
+  if (!isTauriRuntime()) return;
+  await invokeCommand("set_launch_on_startup", { enabled });
+}
