@@ -24,6 +24,7 @@ import {
 import { translations } from "../i18n";
 import { createMessage, requestAssistantReply } from "../chat/ChatController";
 import { loadChatHistory, saveChatHistory } from "../chat/ChatStore";
+import { bubbleTextFromMarkdown } from "../chat/MarkdownDisplay";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
 import { loadPetManifest, loadPetPack, loadPetPackById } from "../pet/PetPackLoader";
 import { nextPetAction, randomIdleAction } from "../pet/PetRuntime";
@@ -38,6 +39,7 @@ import {
   openSettingsWindow,
   setDesktopWindowMode,
   showAppWindow,
+  type ScreenEdge,
   walkAppWindowRandomly,
 } from "../tauri/tauriClient";
 import {
@@ -200,6 +202,7 @@ function PetApp() {
   );
   const [panel, setPanel] = useState<Panel>("none");
   const [toolbarHidden, setToolbarHidden] = useState(false);
+  const [tuckedEdge, setTuckedEdge] = useState<ScreenEdge | null>(null);
   const [toolbarActivityToken, setToolbarActivityToken] = useState(0);
   const [busy, setBusy] = useState(false);
   const [computerTask, setComputerTask] = useState<{
@@ -216,7 +219,7 @@ function PetApp() {
   const lastClickActionRef = useRef<string | null>(null);
   const idleWalkRunningRef = useRef(false);
   const labels = translations[config.appearance.language];
-  const hasFloatingBubble = Boolean(bubble || computerTask);
+  const hasFloatingBubble = Boolean((bubble || computerTask) && !tuckedEdge);
   const chatTheme = chatColorTheme(config.appearance.chatColor);
 
   const markToolbarActivity = useCallback(() => {
@@ -264,8 +267,9 @@ function PetApp() {
   const showBubble = useCallback(
     (text?: string, duration = 3500) => {
       clearBubbleTimer();
-      setBubble(text);
-      if (!text) return;
+      const bubbleText = text ? bubbleTextFromMarkdown(text) : text;
+      setBubble(bubbleText);
+      if (!bubbleText) return;
 
       bubbleTimerRef.current = window.setTimeout(() => {
         bubbleTimerRef.current = null;
@@ -651,7 +655,12 @@ function PetApp() {
         const finalMessages = [...nextMessages, assistantMessage];
         setMessages(finalMessages);
         saveChatHistory(finalMessages);
-        triggerPet("onAiReplyEnd", reply || labels.pet.done, Math.min(14000, Math.max(5200, reply.length * 90)));
+        const bubbleReply = bubbleTextFromMarkdown(reply || labels.pet.done);
+        triggerPet(
+          "onAiReplyEnd",
+          bubbleReply || labels.pet.done,
+          Math.min(9000, Math.max(4200, bubbleReply.length * 85)),
+        );
         setStatus("Ready");
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -930,9 +939,11 @@ function PetApp() {
         onToggleToolbar={() => setToolbarHidden((value) => !value)}
         onToolbarActivity={markToolbarActivity}
         onTuckedEdgeChange={(edge) => {
-          if (!edge) return;
-          setPanel("none");
-          setToolbarHidden(true);
+          setTuckedEdge(edge);
+          if (edge) {
+            setPanel("none");
+            setToolbarHidden(true);
+          }
         }}
         onDragStart={() => {
           markToolbarActivity();

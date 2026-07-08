@@ -7,6 +7,11 @@ export type WindowFrame = ScreenPoint & { scaleFactor: number };
 export type PointerState = ScreenPoint & { leftPressed: boolean };
 export type PointerDragResult = { activated: boolean; edge: ScreenEdge | null };
 
+const FLOATING_BUBBLE_WINDOW_HEIGHT = 128;
+const FLOATING_BUBBLE_STAGE_OFFSET = 122;
+
+let previousDesktopWindowLayout: { mode: DesktopWindowMode; petSize: number; hasFloatingBubble: boolean } | null = null;
+
 type TauriWindow = Window & {
   __TAURI__?: unknown;
 };
@@ -25,7 +30,7 @@ export async function invokeCommand<T>(command: string, args?: Record<string, un
 }
 
 function windowSizeForMode(mode: DesktopWindowMode, petSize: number, hasFloatingBubble = false) {
-  const bubbleHeight = hasFloatingBubble ? 128 : 0;
+  const bubbleHeight = hasFloatingBubble ? FLOATING_BUBBLE_WINDOW_HEIGHT : 0;
   if (mode === "chat") {
     return {
       width: Math.max(340, petSize + 138),
@@ -36,6 +41,10 @@ function windowSizeForMode(mode: DesktopWindowMode, petSize: number, hasFloating
     width: Math.max(320, petSize + 120),
     height: Math.max(330, petSize + 138 + bubbleHeight),
   };
+}
+
+function petStageOffsetForBubble(hasFloatingBubble: boolean) {
+  return hasFloatingBubble ? FLOATING_BUBBLE_STAGE_OFFSET : 0;
 }
 
 export function visibleStripForPet(petSize: number) {
@@ -67,7 +76,20 @@ export async function setDesktopWindowMode(
 
   const { width, height } = windowSizeForMode(mode, petSize, hasFloatingBubble);
   const { appWindow, currentMonitor, LogicalSize, PhysicalPosition } = await import("@tauri-apps/api/window");
+  const previousStageOffset = previousDesktopWindowLayout
+    ? petStageOffsetForBubble(previousDesktopWindowLayout.hasFloatingBubble)
+    : 0;
+  const nextStageOffset = petStageOffsetForBubble(hasFloatingBubble);
+  const positionDeltaY = previousStageOffset - nextStageOffset;
+
   await appWindow.setSize(new LogicalSize(width, height));
+
+  if (positionDeltaY) {
+    const position = await appWindow.outerPosition();
+    await appWindow.setPosition(new PhysicalPosition(position.x, Math.round(position.y + positionDeltaY)));
+  }
+
+  previousDesktopWindowLayout = { mode, petSize, hasFloatingBubble };
 
   if (mode !== "chat") return;
 

@@ -1,6 +1,7 @@
 import type { ChatMessage } from "../config/schema";
 import type { Translations } from "../i18n";
 import { attachmentSizeLabel } from "./AttachmentProcessor";
+import { MarkdownText } from "./MarkdownDisplay";
 
 type MessageListProps = {
   messages: ChatMessage[];
@@ -22,7 +23,7 @@ export function MessageList({ messages, labels }: MessageListProps) {
       {messages.map((message) => (
         <article className={`message ${message.role}`} key={message.id}>
           <span className="message-role">{message.role === "user" ? labels.you : "WorkBuddy"}</span>
-          <p>{message.content}</p>
+          <MarkdownText content={message.content} />
           {message.attachments?.length ? (
             <div className="message-attachments">
               {message.attachments.map((attachment) => (

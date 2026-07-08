@@ -156,6 +156,7 @@ button {
   font-size: 13px;
   line-height: 1.35;
   overflow: auto;
+  overflow-wrap: anywhere;
   scrollbar-width: none;
   -ms-overflow-style: none;
   transform: translateX(-50%);
@@ -462,6 +463,71 @@ button {
 .message p {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.message-markdown {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.message-markdown p,
+.message-markdown ul,
+.message-markdown ol,
+.message-markdown pre {
+  margin: 0;
+}
+
+.message-markdown p {
+  white-space: pre-wrap;
+}
+
+.message-markdown-heading {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.message-markdown ul,
+.message-markdown ol {
+  padding-left: 18px;
+  line-height: 1.45;
+}
+
+.message-markdown li + li {
+  margin-top: 3px;
+}
+
+.message-markdown code {
+  padding: 1px 4px;
+  border-radius: 5px;
+  background: rgba(35, 48, 58, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.message-markdown pre {
+  max-width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(35, 48, 58, 0.07);
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.message-markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.message-markdown-link {
+  font-weight: 700;
+}
+
+.message.user .message-markdown code,
+.message.user .message-markdown pre {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .message-attachments,
@@ -1085,6 +1151,12 @@ button {
   line-height: 1.45;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.chat-history-message .message-markdown {
+  color: #24313a;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .agent-number-field {
