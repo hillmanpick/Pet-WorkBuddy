@@ -8,6 +8,7 @@ import { PetSettings } from "../settings/PetSettings";
 import { ShortcutSettings } from "../settings/ShortcutSettings";
 import { AbilitySettings } from "../settings/AbilitySettings";
 import { ChatHistorySettings } from "../settings/ChatHistorySettings";
+import { AgentSettings } from "../settings/AgentSettings";
 
 type SettingsWindowProps = {
   config: WorkBuddyConfig;
@@ -21,7 +22,7 @@ type SettingsWindowProps = {
   onClose: () => void;
 };
 
-type SettingsTab = "providers" | "pets" | "shortcuts" | "abilities" | "history";
+type SettingsTab = "providers" | "pets" | "shortcuts" | "abilities" | "agent" | "history";
 
 export function SettingsWindow({
   config,
@@ -69,6 +70,9 @@ export function SettingsWindow({
         <button className={tab === "abilities" ? "active" : ""} type="button" onClick={() => setTab("abilities")}>
           {labels.settings.abilities}
         </button>
+        <button className={tab === "agent" ? "active" : ""} type="button" onClick={() => setTab("agent")}>
+          {labels.settings.agent}
+        </button>
         <button className={tab === "history" ? "active" : ""} type="button" onClick={() => setTab("history")}>
           {labels.settings.history}
         </button>
@@ -98,6 +102,9 @@ export function SettingsWindow({
         ) : null}
         {tab === "abilities" ? (
           <AbilitySettings config={config} labels={labels.abilities} onConfigChange={onConfigChange} />
+        ) : null}
+        {tab === "agent" ? (
+          <AgentSettings config={config} labels={labels.agent} onConfigChange={onConfigChange} />
         ) : null}
         {tab === "history" ? <ChatHistorySettings labels={labels.history} /> : null}
       </div>

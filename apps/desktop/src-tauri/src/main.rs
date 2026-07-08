@@ -26,7 +26,9 @@ fn main() {
             shortcuts::unregister_shortcut,
             window::show_app_window,
             window::hide_app_window,
-            window::center_app_window
+            window::center_app_window,
+            window::get_cursor_position,
+            window::get_pointer_state
         ])
         .run(tauri::generate_context!())
         .expect("failed to run WorkBuddy");

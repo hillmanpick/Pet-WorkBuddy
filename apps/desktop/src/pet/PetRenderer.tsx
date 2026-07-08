@@ -16,6 +16,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { LoadedPetPack } from "./PetPackLoader";
 import { resolvePetAsset } from "./PetPackLoader";
 import { PetActionPlayer } from "./PetActionPlayer";
+import { getGlobalCursorPosition, getWindowFrame, isTauriRuntime } from "../tauri/tauriClient";
 
 type PetRendererProps = {
   pack: LoadedPetPack | null;
@@ -23,15 +24,26 @@ type PetRendererProps = {
   actionToken: number;
   rotationYaw: number;
   autoRotate?: boolean;
+  followPointer?: boolean;
 };
 
-export function PetRenderer({ pack, action, actionToken, rotationYaw, autoRotate = false }: PetRendererProps) {
+export function PetRenderer({
+  pack,
+  action,
+  actionToken,
+  rotationYaw,
+  autoRotate = false,
+  followPointer = true,
+}: PetRendererProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PetActionPlayer | null>(null);
   const modelRef = useRef<Group | null>(null);
   const rotationRef = useRef(rotationYaw);
   const actionRef = useRef(action);
   const autoRotateRef = useRef(autoRotate);
+  const followPointerRef = useRef(followPointer);
+  const pointerTargetRef = useRef({ x: 0, y: 0 });
+  const pointerCurrentRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     rotationRef.current = rotationYaw;
@@ -44,6 +56,10 @@ export function PetRenderer({ pack, action, actionToken, rotationYaw, autoRotate
   useEffect(() => {
     autoRotateRef.current = autoRotate;
   }, [autoRotate]);
+
+  useEffect(() => {
+    followPointerRef.current = followPointer;
+  }, [followPointer]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -108,6 +124,60 @@ export function PetRenderer({ pack, action, actionToken, rotationYaw, autoRotate
     resizeObserver.observe(containerElement);
     resize();
 
+    function clampPointer(value: number) {
+      return Math.max(-1, Math.min(1, value));
+    }
+
+    function easePointer(value: number) {
+      const sign = Math.sign(value);
+      const abs = Math.abs(value);
+      if (abs < 0.04) return 0;
+      return sign * Math.pow((abs - 0.04) / 0.96, 0.82);
+    }
+
+    function setPointerTarget(x: number, y: number) {
+      pointerTargetRef.current = {
+        x: easePointer(clampPointer(x)),
+        y: easePointer(clampPointer(y)),
+      };
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const rect = containerElement.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      setPointerTarget(
+        (event.clientX - centerX) / Math.max(rect.width * 0.72, 1),
+        (event.clientY - centerY) / Math.max(rect.height * 0.72, 1),
+      );
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+
+    let globalPointerTimer = 0;
+    let globalPointerInFlight = false;
+    if (isTauriRuntime()) {
+      globalPointerTimer = window.setInterval(() => {
+        if (globalPointerInFlight || disposed || !followPointerRef.current) return;
+        globalPointerInFlight = true;
+        void Promise.all([getGlobalCursorPosition(), getWindowFrame()])
+          .then(([cursor, frame]) => {
+            if (!cursor || !frame || disposed) return;
+            const rect = containerElement.getBoundingClientRect();
+            const scale = frame.scaleFactor || window.devicePixelRatio || 1;
+            const centerX = frame.x + (rect.left + rect.width / 2) * scale;
+            const centerY = frame.y + (rect.top + rect.height / 2) * scale;
+            setPointerTarget(
+              (cursor.x - centerX) / Math.max(rect.width * scale * 0.72, 1),
+              (cursor.y - centerY) / Math.max(rect.height * scale * 0.72, 1),
+            );
+          })
+          .finally(() => {
+            globalPointerInFlight = false;
+          });
+      }, 40);
+    }
+
     renderer.setAnimationLoop(() => {
       const delta = clock.getDelta();
       mixer?.update(delta);
@@ -118,7 +188,15 @@ export function PetRenderer({ pack, action, actionToken, rotationYaw, autoRotate
           rotationRef.current += delta * 0.35;
         }
         const isWalking = actionRef.current === "walk" || actionRef.current === "run";
-        model.rotation.y = rotationRef.current;
+        const target = followPointerRef.current ? pointerTargetRef.current : { x: 0, y: 0 };
+        const current = pointerCurrentRef.current;
+        const followEase = Math.min(1, delta * 9);
+        current.x += (target.x - current.x) * followEase;
+        current.y += (target.y - current.y) * followEase;
+        const pointerYaw = current.x * 0.28;
+        const pointerPitch = current.y * 0.08;
+        model.rotation.y = rotationRef.current + pointerYaw;
+        model.rotation.x = pointerPitch;
         model.position.y = -0.15 + (isWalking ? Math.sin(performance.now() / 135) * 0.025 : 0);
       }
 
@@ -128,6 +206,8 @@ export function PetRenderer({ pack, action, actionToken, rotationYaw, autoRotate
     return () => {
       disposed = true;
       renderer.setAnimationLoop(null);
+      window.clearInterval(globalPointerTimer);
+      window.removeEventListener("pointermove", handlePointerMove);
       resizeObserver.disconnect();
       renderer.dispose();
       scene.clear();

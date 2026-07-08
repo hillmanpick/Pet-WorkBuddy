@@ -67,12 +67,19 @@ export const defaultConfig: WorkBuddyConfig = {
   appearance: {
     petSize: 190,
     language: "zh",
+    petName: "",
+    chatColor: "mint",
   },
   behavior: {
     startHidden: false,
     launchOnStartup: false,
     longIdleMinutes: 5,
     mousePassthrough: false,
+  },
+  agent: {
+    enabled: true,
+    maxIterations: 3,
+    mcpServers: {},
   },
   computerControl: {
     enabled: true,
@@ -106,6 +113,14 @@ export function mergeConfig(value: Partial<WorkBuddyConfig> | null): WorkBuddyCo
     behavior: {
       ...defaultConfig.behavior,
       ...value.behavior,
+    },
+    agent: {
+      ...defaultConfig.agent,
+      ...value.agent,
+      mcpServers: {
+        ...defaultConfig.agent.mcpServers,
+        ...value.agent?.mcpServers,
+      },
     },
     computerControl: {
       ...defaultConfig.computerControl,

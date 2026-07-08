@@ -1,4 +1,7 @@
 import type { ChatMessage, WorkBuddyConfig } from "../config/schema";
+import { describeToolsForPrompt, getToolDefinition, inferToolRisk } from "../agent/tools/ToolRegistry";
+import { riskToSensitivity } from "../agent/tools/PermissionEngine";
+import type { AgentToolCall } from "../agent/tools/ToolTypes";
 import { getProvider } from "../providers/ProviderRegistry";
 import { getApiKey } from "../settings/SettingsStore";
 import type { ActionResult, ComputerAction, ComputerTaskPlan, TaskSensitivity } from "./ComputerTask";
@@ -22,6 +25,7 @@ type AgentPlanPayload = {
   sensitivity?: TaskSensitivity;
   steps?: unknown[];
   actions?: unknown[];
+  toolCalls?: unknown[];
 };
 
 type AgentReviewPayload = {
@@ -32,23 +36,11 @@ type AgentReviewPayload = {
   sensitivity?: TaskSensitivity;
   steps?: unknown[];
   actions?: unknown[];
+  toolCalls?: unknown[];
 };
 
 const COMPUTER_REQUEST_PATTERN =
-  /(帮我|请|打开|启动|新建|创建|生成|写|整理|复制|粘贴|输入|发送|发给|搜索|下载|安装|运行|执行|改名|移动|删除|压缩|解压|设置|提醒|电脑|文件|文件夹|网页|微信|wps|word|excel|ppt|浏览器|记事本|powershell|cmd|open|start|launch|create|write|run|execute|copy|paste|send|search|download|install|rename|move|delete|organize|folder|file|browser|app)/i;
-
-const SUPPORTED_ACTIONS = `[
-  {"type":"open_app","app":"wechat|wps_writer|word|explorer|notepad|calculator|paint|settings|screenshot"},
-  {"type":"open_folder","folder":"desktop|downloads|documents|pictures|music|videos|home"},
-  {"type":"open_url","url":"https://..."},
-  {"type":"set_clipboard","text":"..."},
-  {"type":"paste_text","text":"..."},
-  {"type":"create_word_document","app":"wps_writer|word","text":"document text"},
-  {"type":"hotkey","keys":["ctrl","n"]},
-  {"type":"key","key":"enter"},
-  {"type":"wait","ms":1000},
-  {"type":"shell_command","command":"PowerShell command"}
-]`;
+  /(帮我|请|打开|启动|新建|创建|生成|写|整理|复制|粘贴|输入|发送|发给|搜索|查询|点开|点击|下载|安装|运行|执行|改名|移动|删除|压缩|解压|设置|提醒|电脑|文件|文件夹|网页|链接|微信|百度|必应|浏览器|记事本|wps|word|excel|ppt|powershell|cmd|open|start|launch|create|write|run|execute|copy|paste|send|search|download|install|rename|move|delete|organize|folder|file|browser|app|click|link)/i;
 
 const AGENT_SYSTEM_PROMPT = `You are WorkBuddy Agent Planner, a desktop-computer task planner.
 
@@ -64,17 +56,23 @@ If it is a computer task, return this shape:
   "summary": "what will be done",
   "sensitivity": "normal" | "sensitive",
   "steps": ["visible user-facing steps"],
-  "actions": ${SUPPORTED_ACTIONS}
+  "toolCalls": [
+    {"tool":"tool.name","arguments":{},"reason":"why this tool is needed"}
+  ]
 }
 
+Available tools:
+__TOOLS__
+
 Rules:
-- Prefer structured actions over shell_command.
-- Use shell_command only when the task cannot be done with the structured tools.
-- Mark sensitivity as "sensitive" for shell_command, file deletion/move/rename, sending messages, changing system settings, installing software, or anything irreversible.
+- Use only tools from the available tools list.
+- Prefer specialized tools over terminal.run.
+- You are running inside WorkBuddy with local tools. For opening websites, searching, clicking, typing, files, apps, or clipboard tasks, produce toolCalls instead of saying you cannot operate the computer.
+- Mark sensitivity as "sensitive" for high or critical risk tools, file deletion/move/rename, sending messages, changing system settings, installing software, or anything irreversible.
 - Do not create actions that steal credentials, bypass login, hide from the user, disable security tools, or exfiltrate private data.
 - If the user asks to write content and does not provide exact text, generate useful content directly in the action text.
-- For Word/WPS document tasks, prefer create_word_document with complete text instead of keyboard typing.
-- Keep actions reasonably small. Max 12 actions.`;
+- For Word/WPS document tasks, prefer office.create_word with complete text instead of keyboard typing.
+- Keep toolCalls reasonably small. Max 12 calls.`;
 
 const AGENT_REVIEW_PROMPT = `You are WorkBuddy Agent Supervisor.
 
@@ -85,19 +83,21 @@ Decide whether the user's task is actually complete.
 
 Return one of:
 {"status":"complete","message":"brief completion message"}
-{"status":"continue","message":"why another step is needed","title":"short title","summary":"next step summary","sensitivity":"normal|sensitive","steps":["visible steps"],"actions":${SUPPORTED_ACTIONS}}
+{"status":"continue","message":"why another step is needed","title":"short title","summary":"next step summary","sensitivity":"normal|sensitive","steps":["visible steps"],"toolCalls":[{"tool":"tool.name","arguments":{},"reason":"why"}]}
 {"status":"needs_user","message":"what the user must do manually"}
 {"status":"failed","message":"why the task cannot be completed"}
 
+Available tools:
+__TOOLS__
+
 Rules:
 - Never mark complete just because actions were attempted. Mark complete only if the execution results show the intended outcome.
-- Treat open_url results as "the OS accepted an open request", not proof that the browser page loaded or that a search result is visible.
-- If an action failed, produce corrected actions when possible; otherwise return needs_user or failed.
-- Prefer structured actions over shell_command.
-- Use shell_command only when the task cannot be done with structured actions.
-- Mark sensitivity as "sensitive" for shell_command, file deletion/move/rename, sending messages, changing system settings, installing software, or anything irreversible.
+- Treat browser.open results as "the OS accepted an open request", not proof that the browser page loaded or that a search result is visible.
+- If a tool failed, produce corrected toolCalls when possible; otherwise return needs_user or failed.
+- Prefer specialized tools over terminal.run.
+- Mark sensitivity as "sensitive" for high or critical risk tools, file deletion/move/rename, sending messages, changing system settings, installing software, or anything irreversible.
 - Do not bypass logins, verification, permission prompts, or platform safety controls.
-- Keep follow-up actions small. Max 8 actions.`;
+- Keep follow-up toolCalls small. Max 8 calls.`;
 
 export function looksLikeComputerRequest(text: string): boolean {
   return COMPUTER_REQUEST_PATTERN.test(text);
@@ -112,7 +112,7 @@ export async function createAgentTaskPlan(
   text: string,
   history: ChatMessage[],
 ): Promise<ComputerTaskPlan | null> {
-  const result = await callAgentModel(config, AGENT_SYSTEM_PROMPT, buildPlanningUserMessage(text, history));
+  const result = await callAgentModel(config, agentPrompt(AGENT_SYSTEM_PROMPT), buildPlanningUserMessage(text, history));
   return parseAgentTaskPlan(result.text, text);
 }
 
@@ -125,10 +125,14 @@ export async function continueAgentTaskPlan(
   const userTask = plan.agentTask?.userTask ?? plan.summary;
   const result = await callAgentModel(
     config,
-    AGENT_REVIEW_PROMPT,
+    agentPrompt(AGENT_REVIEW_PROMPT),
     buildReviewUserMessage(userTask, plan, observations, history),
   );
   return parseAgentContinuation(result.text, userTask, observations);
+}
+
+function agentPrompt(template: string): string {
+  return template.replace("__TOOLS__", describeToolsForPrompt());
 }
 
 async function callAgentModel(config: WorkBuddyConfig, systemPrompt: string, content: string) {
@@ -208,15 +212,14 @@ function parseAgentTaskPlan(text: string, userTask: string): ComputerTaskPlan | 
   const payload = parseJsonPayload<AgentPlanPayload>(text);
   if (!payload || payload.intent !== "computer_task") return null;
 
-  const actions = sanitizeActions(payload.actions ?? [], 12);
+  const actions = sanitizeToolCalls(payload.toolCalls ?? payload.actions ?? [], 12);
   if (!actions.length) return null;
 
-  const sensitivity = inferSensitivity(payload.sensitivity === "sensitive" ? "sensitive" : "normal", actions);
   return {
     id: crypto.randomUUID(),
     title: normalizeText(payload.title, "Computer task"),
     summary: normalizeText(payload.summary, "Run a computer task"),
-    sensitivity,
+    sensitivity: inferPlanSensitivity(payload.sensitivity === "sensitive" ? "sensitive" : "normal", actions),
     steps: normalizeSteps(Array.isArray(payload.steps) ? payload.steps : []),
     actions,
     agentTask: { userTask },
@@ -241,7 +244,7 @@ function parseAgentContinuation(
   }
 
   if (payload.status === "continue") {
-    const actions = sanitizeActions(payload.actions ?? [], 8);
+    const actions = sanitizeToolCalls(payload.toolCalls ?? payload.actions ?? [], 8);
     if (!actions.length) {
       return {
         status: "needs_user",
@@ -249,7 +252,7 @@ function parseAgentContinuation(
       };
     }
 
-    const sensitivity = inferSensitivity(payload.sensitivity === "sensitive" ? "sensitive" : "normal", actions);
+    const sensitivity = inferPlanSensitivity(payload.sensitivity === "sensitive" ? "sensitive" : "normal", actions);
     return {
       status: "continue",
       message: normalizeText(payload.message, "继续执行下一步。"),
@@ -297,75 +300,49 @@ function parseJsonPayload<T>(text: string): T | null {
   }
 }
 
-function sanitizeActions(values: unknown[], maxActions: number): ComputerAction[] {
+function sanitizeToolCalls(values: unknown[], maxActions: number): ComputerAction[] {
   const actions: ComputerAction[] = [];
 
   values.slice(0, maxActions).forEach((value) => {
     if (!value || typeof value !== "object") return;
-    const action = value as Record<string, unknown>;
-    if (typeof action.type !== "string") return;
-
-    switch (action.type) {
-      case "open_app":
-        if (typeof action.app === "string") actions.push({ type: "open_app", app: action.app });
-        return;
-      case "open_folder":
-        if (typeof action.folder === "string") actions.push({ type: "open_folder", folder: action.folder });
-        return;
-      case "open_url":
-        if (typeof action.url === "string" && /^https?:\/\//i.test(action.url)) {
-          actions.push({ type: "open_url", url: action.url });
-        }
-        return;
-      case "set_clipboard":
-        if (typeof action.text === "string") actions.push({ type: "set_clipboard", text: action.text.slice(0, 4000) });
-        return;
-      case "paste_text":
-        if (typeof action.text === "string") actions.push({ type: "paste_text", text: action.text.slice(0, 4000) });
-        return;
-      case "create_word_document":
-        if (typeof action.text === "string") {
-          actions.push({
-            type: "create_word_document",
-            app: action.app === "word" ? "word" : "wps_writer",
-            text: action.text.slice(0, 20_000),
-          });
-        }
-        return;
-      case "hotkey":
-        if (Array.isArray(action.keys)) {
-          actions.push({
-            type: "hotkey",
-            keys: action.keys.filter((key) => typeof key === "string").slice(0, 4) as string[],
-          });
-        }
-        return;
-      case "key":
-        if (typeof action.key === "string") actions.push({ type: "key", key: action.key });
-        return;
-      case "wait":
-        if (typeof action.ms === "number") actions.push({ type: "wait", ms: Math.max(0, Math.min(10_000, action.ms)) });
-        return;
-      case "shell_command":
-        if (typeof action.command === "string") actions.push({ type: "shell_command", command: action.command.slice(0, 4000) });
-        return;
-      default:
-        return;
-    }
+    const raw = value as Record<string, unknown>;
+    const tool = typeof raw.tool === "string" ? raw.tool : typeof raw.name === "string" ? raw.name : undefined;
+    if (!tool || !getToolDefinition(tool)) return;
+    const args = raw.arguments && typeof raw.arguments === "object" ? (raw.arguments as Record<string, unknown>) : {};
+    const reason = typeof raw.reason === "string" ? raw.reason.slice(0, 240) : undefined;
+    const call: AgentToolCall = {
+      id: crypto.randomUUID(),
+      tool,
+      arguments: sanitizeArguments(args),
+      reason,
+    };
+    actions.push({ type: "tool_call", call });
   });
 
   return actions;
 }
 
-function inferSensitivity(base: TaskSensitivity, actions: ComputerAction[]): TaskSensitivity {
+function inferPlanSensitivity(base: TaskSensitivity, actions: ComputerAction[]): TaskSensitivity {
   if (base === "sensitive") return "sensitive";
   return actions.some((action) => {
+    if (action.type === "tool_call") return riskToSensitivity(inferToolRisk(action.call)) === "sensitive";
     if (action.type === "shell_command" || action.type === "organize_folder") return true;
     if (action.type === "key" && action.key.toLowerCase() === "enter") return true;
     return false;
   })
     ? "sensitive"
     : "normal";
+}
+
+function sanitizeArguments(args: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(args).map(([key, value]) => {
+      if (typeof value === "string") return [key, value.slice(0, 20_000)];
+      if (typeof value === "number" || typeof value === "boolean") return [key, value];
+      if (Array.isArray(value)) return [key, value.filter((item) => typeof item === "string").slice(0, 20)];
+      return [key, value];
+    }),
+  );
 }
 
 function normalizeText(value: unknown, fallback: string): string {

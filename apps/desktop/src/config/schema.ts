@@ -35,6 +35,18 @@ export type ComputerControlConfig = {
   allowWechatSend: boolean;
 };
 
+export type McpServerConfig = {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+};
+
+export type AgentConfig = {
+  enabled: boolean;
+  maxIterations: number;
+  mcpServers: Record<string, McpServerConfig>;
+};
+
 export type WorkBuddyConfig = {
   activeProvider: ProviderId;
   activePetId: string;
@@ -44,6 +56,8 @@ export type WorkBuddyConfig = {
   appearance: {
     petSize: number;
     language: UiLanguage;
+    petName: string;
+    chatColor: string;
   };
   behavior: {
     startHidden: boolean;
@@ -51,6 +65,7 @@ export type WorkBuddyConfig = {
     longIdleMinutes: number;
     mousePassthrough: boolean;
   };
+  agent: AgentConfig;
   computerControl: ComputerControlConfig;
 };
 
@@ -85,9 +100,23 @@ export type PetManifest = {
 
 export type ChatRole = "system" | "user" | "assistant";
 
+export type ChatAttachmentKind = "image" | "text" | "file";
+
+export type ChatAttachment = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  kind: ChatAttachmentKind;
+  dataUrl?: string;
+  text?: string;
+  truncated?: boolean;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
   createdAt: number;
+  attachments?: ChatAttachment[];
 };

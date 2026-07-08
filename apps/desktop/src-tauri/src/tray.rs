@@ -18,6 +18,7 @@ pub fn build_tray() -> SystemTray {
 pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
     if let SystemTrayEvent::DoubleClick { .. } = event {
         show_main_window(app);
+        let _ = app.emit_all("workbuddy://tray", "showPet");
         return;
     }
 
@@ -29,8 +30,7 @@ pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
         "show_chat" => {
             let _ = app.emit_all("workbuddy://tray", "showChat");
             if let Some(window) = app.get_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+                show_window_without_taskbar(&window);
             }
         }
         "show_settings" => {
@@ -39,10 +39,11 @@ pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
         "toggle_pet" => {
             if let Some(window) = app.get_window("main") {
                 if window.is_visible().unwrap_or(true) {
+                    let _ = window.set_skip_taskbar(true);
                     let _ = window.hide();
                 } else {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    show_window_without_taskbar(&window);
+                    let _ = app.emit_all("workbuddy://tray", "showPet");
                 }
             }
         }
@@ -53,7 +54,12 @@ pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
 
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
+        show_window_without_taskbar(&window);
     }
+}
+
+fn show_window_without_taskbar(window: &tauri::Window) {
+    let _ = window.set_skip_taskbar(true);
+    let _ = window.show();
+    let _ = window.set_focus();
 }

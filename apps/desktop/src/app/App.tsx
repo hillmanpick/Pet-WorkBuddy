@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import type { ChatMessage, ProviderId, QuickCommand, WorkBuddyConfig } from "../config/schema";
 import { defaultConfig, mergeConfig } from "../config/defaultConfig";
 import { ChatWindow } from "../components/ChatWindow";
+import type { ChatDraft } from "../chat/PromptBox";
 import { PetWindow } from "../components/PetWindow";
 import { SettingsWindow } from "../components/SettingsWindow";
 import type { ComputerTaskPhase } from "../components/ComputerTaskPanel";
@@ -57,9 +58,53 @@ type Panel = "none" | "chat" | "settings";
 const CONFIG_CHANNEL = "workbuddy.config";
 const PET_IDLE_WALK_MS = 5 * 60 * 1000;
 const AGENT_MAX_ITERATIONS = 3;
+const CHAT_COLOR_THEMES: Record<
+  string,
+  { accent: string; border: string; soft: string; surface: string; onAccent: string }
+> = {
+  mint: {
+    accent: "#2e6f73",
+    border: "rgba(46, 111, 115, 0.22)",
+    soft: "#edf7f4",
+    surface: "rgba(250, 252, 251, 0.96)",
+    onAccent: "#ffffff",
+  },
+  rose: {
+    accent: "#c65f89",
+    border: "rgba(198, 95, 137, 0.24)",
+    soft: "#fff0f6",
+    surface: "rgba(255, 250, 252, 0.97)",
+    onAccent: "#ffffff",
+  },
+  blue: {
+    accent: "#4778c7",
+    border: "rgba(71, 120, 199, 0.24)",
+    soft: "#eef5ff",
+    surface: "rgba(249, 252, 255, 0.97)",
+    onAccent: "#ffffff",
+  },
+  amber: {
+    accent: "#b8792f",
+    border: "rgba(184, 121, 47, 0.24)",
+    soft: "#fff6e7",
+    surface: "rgba(255, 252, 247, 0.97)",
+    onAccent: "#ffffff",
+  },
+  graphite: {
+    accent: "#4b5563",
+    border: "rgba(75, 85, 99, 0.24)",
+    soft: "#f1f5f9",
+    surface: "rgba(248, 250, 252, 0.97)",
+    onAccent: "#ffffff",
+  },
+};
 
 function randomFrom<T>(items: readonly T[]): T | undefined {
   return items[Math.floor(Math.random() * items.length)];
+}
+
+function chatColorTheme(value: string | undefined) {
+  return CHAT_COLOR_THEMES[value || "mint"] ?? CHAT_COLOR_THEMES.mint;
 }
 
 function yawForMovement(dx: number, dy: number): number {
@@ -155,6 +200,7 @@ function PetApp() {
   );
   const [panel, setPanel] = useState<Panel>("none");
   const [toolbarHidden, setToolbarHidden] = useState(false);
+  const [toolbarActivityToken, setToolbarActivityToken] = useState(0);
   const [busy, setBusy] = useState(false);
   const [computerTask, setComputerTask] = useState<{
     plan: ComputerTaskPlan;
@@ -170,6 +216,13 @@ function PetApp() {
   const lastClickActionRef = useRef<string | null>(null);
   const idleWalkRunningRef = useRef(false);
   const labels = translations[config.appearance.language];
+  const hasFloatingBubble = Boolean(bubble || computerTask);
+  const chatTheme = chatColorTheme(config.appearance.chatColor);
+
+  const markToolbarActivity = useCallback(() => {
+    lastPetInteractionAtRef.current = Date.now();
+    setToolbarActivityToken((value) => value + 1);
+  }, []);
 
   const updateConfig = useCallback((next: WorkBuddyConfig) => {
     setConfig(next);
@@ -308,6 +361,7 @@ function PetApp() {
 
   const hidePet = useCallback(() => {
     if (isTauriRuntime()) {
+      setPanel("none");
       void hideAppWindow();
     } else {
       setPanel("none");
@@ -355,13 +409,14 @@ function PetApp() {
       triggerPet("onUserSendMessage", labels.computer.running);
 
       try {
-        const results = await executeComputerActions(actions);
+        const results = await executeComputerActions(actions, plan.id);
 
         if (isAgentTaskPlan(plan) && phase === "prepare") {
           let currentPlan = plan;
           let observations = actionObservations(1, actions, results);
+          const maxIterations = Math.max(1, Math.min(8, config.agent.maxIterations || AGENT_MAX_ITERATIONS));
 
-          for (let iteration = 1; iteration <= AGENT_MAX_ITERATIONS; iteration += 1) {
+          for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
             setStatus("Checking task");
             triggerPet("onUserSendMessage", labels.computer.checking, 4200);
 
@@ -417,7 +472,7 @@ function PetApp() {
               return;
             }
 
-            if (iteration >= AGENT_MAX_ITERATIONS) {
+            if (iteration >= maxIterations) {
               setComputerTask(null);
               setStatus("Needs user");
               appendAssistantMessage(labels.computer.iterationLimit);
@@ -428,7 +483,7 @@ function PetApp() {
             currentPlan = review.plan;
             setStatus("Running follow-up task");
             triggerPet("onUserSendMessage", labels.computer.continuing, 4200);
-            const nextResults = await executeComputerActions(currentPlan.actions);
+            const nextResults = await executeComputerActions(currentPlan.actions, currentPlan.id);
             observations = [
               ...observations,
               ...actionObservations(iteration + 1, currentPlan.actions, nextResults),
@@ -456,7 +511,7 @@ function PetApp() {
             appendAssistantMessage(labels.computer.sensitiveDenied);
             triggerPet("onError", labels.computer.sensitiveDenied, 7000);
           } else if (shouldAutoRunComputerPhase(config, plan, "final")) {
-            const finalResults = await executeComputerActions(plan.finalActions);
+            const finalResults = await executeComputerActions(plan.finalActions, plan.id);
             assertComputerActionsSucceeded(finalResults);
             setComputerTask(null);
             setStatus("Ready");
@@ -515,10 +570,12 @@ function PetApp() {
   );
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (draft: ChatDraft | string) => {
       if (busy) return;
 
-      const userMessage = createMessage("user", text);
+      const text = typeof draft === "string" ? draft : draft.content;
+      const attachments = typeof draft === "string" ? [] : draft.attachments;
+      const userMessage = createMessage("user", text, attachments);
       const nextMessages = [...messages, userMessage];
       setMessages(nextMessages);
       saveChatHistory(nextMessages);
@@ -528,7 +585,7 @@ function PetApp() {
 
       taskPlan = createPriorityComputerTaskPlan(text, config.appearance.language);
 
-      if (!taskPlan && config.computerControl.enabled && looksLikeComputerRequest(text)) {
+      if (!taskPlan && config.agent.enabled && config.computerControl.enabled && looksLikeComputerRequest(text)) {
         setStatus("Planning task");
         triggerPet("onUserSendMessage", labels.computer.planning, 5200);
         try {
@@ -741,6 +798,16 @@ function PetApp() {
   }, [startIdleWalk]);
 
   useEffect(() => {
+    if (toolbarHidden) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setToolbarHidden(true);
+    }, 15000);
+
+    return () => window.clearTimeout(timer);
+  }, [toolbarActivityToken, toolbarHidden]);
+
+  useEffect(() => {
     if (!loadedRef.current) return;
     void registerConfiguredShortcuts(config);
   }, [config]);
@@ -755,8 +822,8 @@ function PetApp() {
 
   useEffect(() => {
     const mode = panel === "chat" ? "chat" : "pet";
-    void setDesktopWindowMode(mode, config.appearance.petSize);
-  }, [config.appearance.petSize, panel]);
+    void setDesktopWindowMode(mode, config.appearance.petSize, hasFloatingBubble);
+  }, [config.appearance.petSize, hasFloatingBubble, panel]);
 
   useEffect(() => {
     let disposeShortcut: () => void = () => undefined;
@@ -766,6 +833,12 @@ function PetApp() {
       disposeShortcut = dispose;
     });
     void listenTauriEvent<string>("workbuddy://tray", (payload) => {
+      if (payload === "showPet") {
+        setPanel("none");
+        setToolbarHidden(false);
+        markToolbarActivity();
+        triggerPet("onClick", labels.pet.back);
+      }
       if (payload === "showChat") openChat();
       if (payload === "showSettings") openSettings();
     }).then((dispose) => {
@@ -776,7 +849,7 @@ function PetApp() {
       disposeShortcut();
       disposeTray();
     };
-  }, [handleShortcut, openChat, openSettings]);
+  }, [handleShortcut, labels.pet.back, markToolbarActivity, openChat, openSettings, triggerPet]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -812,8 +885,17 @@ function PetApp() {
 
   return (
     <main
-      className={`app-shell panel-${panel}`}
-      style={{ "--pet-size": `${config.appearance.petSize}px` } as CSSProperties}
+      className={`app-shell panel-${panel}${hasFloatingBubble ? " has-floating-bubble" : ""}`}
+      style={
+        {
+          "--pet-size": `${config.appearance.petSize}px`,
+          "--chat-accent": chatTheme.accent,
+          "--chat-border": chatTheme.border,
+          "--chat-soft": chatTheme.soft,
+          "--chat-surface": chatTheme.surface,
+          "--chat-on-accent": chatTheme.onAccent,
+        } as CSSProperties
+      }
     >
       <PetWindow
         pack={petPack}
@@ -825,10 +907,11 @@ function PetApp() {
         computerLabels={labels.computer}
         labels={labels.pet}
         petSize={config.appearance.petSize}
+        petDisplayName={config.appearance.petName.trim() || petPack?.name}
         busy={busy}
         toolbarHidden={toolbarHidden}
         onClickPet={() => {
-          lastPetInteractionAtRef.current = Date.now();
+          markToolbarActivity();
           if (toolbarHidden) {
             setToolbarHidden(false);
             return;
@@ -841,16 +924,22 @@ function PetApp() {
         onConfirmComputerTask={confirmComputerTask}
         onCancelComputerTask={cancelComputerTask}
         onRotatePet={(delta) => {
-          lastPetInteractionAtRef.current = Date.now();
+          markToolbarActivity();
           setPetRotationYaw((value) => value + delta);
         }}
         onToggleToolbar={() => setToolbarHidden((value) => !value)}
+        onToolbarActivity={markToolbarActivity}
+        onTuckedEdgeChange={(edge) => {
+          if (!edge) return;
+          setPanel("none");
+          setToolbarHidden(true);
+        }}
         onDragStart={() => {
-          lastPetInteractionAtRef.current = Date.now();
+          markToolbarActivity();
           triggerPet("onDragStart");
         }}
         onDragEnd={() => {
-          lastPetInteractionAtRef.current = Date.now();
+          markToolbarActivity();
           triggerPet("onDragEnd");
         }}
       />

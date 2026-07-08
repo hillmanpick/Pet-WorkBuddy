@@ -1,7 +1,11 @@
 type EventUnlisten = () => void;
-type ScreenEdge = "left" | "right" | "top" | "bottom";
+export type ScreenEdge = "left" | "right" | "top" | "bottom";
 
 export type DesktopWindowMode = "pet" | "chat";
+export type ScreenPoint = { x: number; y: number };
+export type WindowFrame = ScreenPoint & { scaleFactor: number };
+export type PointerState = ScreenPoint & { leftPressed: boolean };
+export type PointerDragResult = { activated: boolean; edge: ScreenEdge | null };
 
 type TauriWindow = Window & {
   __TAURI__?: unknown;
@@ -20,15 +24,22 @@ export async function invokeCommand<T>(command: string, args?: Record<string, un
   return invoke<T>(command, args);
 }
 
-function windowSizeForMode(mode: DesktopWindowMode, petSize: number) {
+function windowSizeForMode(mode: DesktopWindowMode, petSize: number, hasFloatingBubble = false) {
+  const bubbleHeight = hasFloatingBubble ? 128 : 0;
   if (mode === "chat") {
-    return { width: Math.max(360, petSize + 150), height: Math.max(390, petSize + 190) };
+    return {
+      width: Math.max(340, petSize + 138),
+      height: Math.max(410, petSize + 230 + bubbleHeight),
+    };
   }
-  return { width: Math.max(320, petSize + 120), height: Math.max(330, petSize + 138) };
+  return {
+    width: Math.max(320, petSize + 120),
+    height: Math.max(330, petSize + 138 + bubbleHeight),
+  };
 }
 
 export function visibleStripForPet(petSize: number) {
-  return Math.round(Math.max(72, petSize * 0.48));
+  return Math.round(Math.max(58, petSize * 0.34));
 }
 
 export async function listenTauriEvent<T>(
@@ -50,12 +61,32 @@ export async function startWindowDrag(): Promise<void> {
 export async function setDesktopWindowMode(
   mode: DesktopWindowMode,
   petSize: number,
+  hasFloatingBubble = false,
 ): Promise<void> {
   if (!isTauriRuntime()) return;
 
-  const { width, height } = windowSizeForMode(mode, petSize);
-  const { appWindow, LogicalSize } = await import("@tauri-apps/api/window");
+  const { width, height } = windowSizeForMode(mode, petSize, hasFloatingBubble);
+  const { appWindow, currentMonitor, LogicalSize, PhysicalPosition } = await import("@tauri-apps/api/window");
   await appWindow.setSize(new LogicalSize(width, height));
+
+  if (mode !== "chat") return;
+
+  const monitor = await currentMonitor();
+  if (!monitor) return;
+
+  const position = await appWindow.outerPosition();
+  const size = await appWindow.outerSize();
+  const margin = Math.round(8 * (monitor.scaleFactor || 1));
+  const minX = monitor.position.x + margin;
+  const minY = monitor.position.y + margin;
+  const maxX = monitor.position.x + monitor.size.width - size.width - margin;
+  const maxY = monitor.position.y + monitor.size.height - size.height - margin;
+  const x = Math.min(Math.max(position.x, minX), Math.max(minX, maxX));
+  const y = Math.min(Math.max(position.y, minY), Math.max(minY, maxY));
+
+  if (x !== position.x || y !== position.y) {
+    await appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
+  }
 }
 
 export async function openSettingsWindow(): Promise<void> {
@@ -130,6 +161,7 @@ function nearestPetEdge(
 export async function snapWindowToScreenEdge(
   visible = 92,
   petSize = 190,
+  force = false,
 ): Promise<ScreenEdge | null> {
   if (!isTauriRuntime()) return null;
 
@@ -150,7 +182,7 @@ export async function snapWindowToScreenEdge(
 
   const tucked = nearestPetEdge(position, bounds, area);
   const snapTolerance = Math.max(42, petSize * 0.38 * scaleFactor);
-  if (tucked.value > snapTolerance) return null;
+  if (!force && tucked.value > snapTolerance) return null;
   const visibleSize = visible * scaleFactor;
 
   let x = position.x;
@@ -164,18 +196,18 @@ export async function snapWindowToScreenEdge(
   return tucked.edge;
 }
 
-export async function peekWindowFromScreenEdge(petSize = 190): Promise<void> {
-  if (!isTauriRuntime()) return;
+export async function peekWindowFromScreenEdge(petSize = 190): Promise<ScreenEdge | null> {
+  if (!isTauriRuntime()) return null;
 
   const { appWindow, currentMonitor, PhysicalPosition } = await import("@tauri-apps/api/window");
   const monitor = await currentMonitor();
-  if (!monitor) return;
+  if (!monitor) return null;
 
   const position = await appWindow.outerPosition();
   const size = await appWindow.outerSize();
   const scaleFactor = monitor.scaleFactor || 1;
   const bounds = petVisualBounds(size, petSize, scaleFactor);
-  const margin = 4 * scaleFactor;
+  const visibleSize = Math.round(Math.max(92, petSize * 0.58)) * scaleFactor;
   const area = {
     x: monitor.position.x,
     y: monitor.position.y,
@@ -185,17 +217,36 @@ export async function peekWindowFromScreenEdge(petSize = 190): Promise<void> {
 
   let x = position.x;
   let y = position.y;
-  if (position.x + bounds.left < area.x) x = area.x - bounds.left + margin;
-  if (position.x + bounds.right > area.x + area.width) x = area.x + area.width - bounds.right - margin;
-  if (position.y + bounds.top < area.y) y = area.y - bounds.top + margin;
-  if (position.y + bounds.bottom > area.y + area.height) y = area.y + area.height - bounds.bottom - margin;
+  let edge: ScreenEdge | null = null;
+  if (position.x + bounds.left < area.x) {
+    edge = "left";
+    x = area.x - bounds.left - bounds.size + visibleSize;
+  }
+  if (position.x + bounds.right > area.x + area.width) {
+    edge = "right";
+    x = area.x + area.width + bounds.size - visibleSize - bounds.right;
+  }
+  if (position.y + bounds.top < area.y) {
+    edge = "top";
+    y = area.y - bounds.top - bounds.size + visibleSize;
+  }
+  if (position.y + bounds.bottom > area.y + area.height) {
+    edge = "bottom";
+    y = area.y + area.height + bounds.size - visibleSize - bounds.bottom;
+  }
+
+  if (!edge) return null;
 
   if (x !== position.x || y !== position.y) {
     await appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
   }
+  return edge;
 }
 
-export async function armWindowEdgeSnap(petSize = 190): Promise<EventUnlisten> {
+export async function armWindowEdgeSnap(
+  petSize = 190,
+  onSettled?: (edge: ScreenEdge | null) => void,
+): Promise<EventUnlisten> {
   if (!isTauriRuntime()) return () => undefined;
 
   const { appWindow } = await import("@tauri-apps/api/window");
@@ -213,12 +264,17 @@ export async function armWindowEdgeSnap(petSize = 190): Promise<EventUnlisten> {
   unlisten = await appWindow.onMoved(() => {
     window.clearTimeout(timer);
     timer = window.setTimeout(() => {
-      cleanup();
-      void snapWindowToScreenEdge(visible, petSize);
-    }, 240);
+      void snapWindowToScreenEdge(visible, petSize).then((edge) => {
+        onSettled?.(edge);
+        cleanup();
+      });
+    }, 260);
   });
 
-  cleanupTimer = window.setTimeout(cleanup, 8000);
+  cleanupTimer = window.setTimeout(() => {
+    onSettled?.(null);
+    cleanup();
+  }, 10_000);
   return cleanup;
 }
 
@@ -235,6 +291,130 @@ export async function showAppWindow(): Promise<void> {
 export async function centerAppWindow(): Promise<void> {
   if (!isTauriRuntime()) return;
   await invokeCommand("center_app_window");
+}
+
+export async function getGlobalCursorPosition(): Promise<ScreenPoint | null> {
+  if (!isTauriRuntime()) return null;
+  return invokeCommand<ScreenPoint>("get_cursor_position");
+}
+
+export async function getPointerState(): Promise<PointerState | null> {
+  if (!isTauriRuntime()) return null;
+  return invokeCommand<PointerState>("get_pointer_state");
+}
+
+export async function getWindowFrame(): Promise<WindowFrame | null> {
+  if (!isTauriRuntime()) return null;
+
+  const { appWindow, currentMonitor } = await import("@tauri-apps/api/window");
+  const [position, monitor] = await Promise.all([appWindow.outerPosition(), currentMonitor()]);
+  return {
+    x: position.x,
+    y: position.y,
+    scaleFactor: monitor?.scaleFactor || window.devicePixelRatio || 1,
+  };
+}
+
+export async function dragWindowWithPointer(
+  petSize = 190,
+  options: {
+    activationDistance?: number;
+    onActivated?: () => void;
+  } = {},
+): Promise<PointerDragResult> {
+  if (!isTauriRuntime()) return { activated: false, edge: null };
+
+  const { appWindow, PhysicalPosition } = await import("@tauri-apps/api/window");
+  const [startPointer, startPosition] = await Promise.all([getPointerState(), appWindow.outerPosition()]);
+  if (!startPointer?.leftPressed) return { activated: false, edge: null };
+
+  const activationDistance = options.activationDistance ?? 2;
+  let activated = false;
+  let lastX = startPosition.x;
+  let lastY = startPosition.y;
+  let moveInFlight = false;
+  let queuedPosition: { x: number; y: number } | null = null;
+
+  function flushMoveQueue() {
+    if (moveInFlight || !queuedPosition) return;
+
+    const next = queuedPosition;
+    queuedPosition = null;
+    moveInFlight = true;
+    void appWindow
+      .setPosition(new PhysicalPosition(next.x, next.y))
+      .catch(() => undefined)
+      .finally(() => {
+        moveInFlight = false;
+        flushMoveQueue();
+      });
+  }
+
+  function queueMove(x: number, y: number) {
+    if (x === lastX && y === lastY) return;
+    lastX = x;
+    lastY = y;
+    queuedPosition = { x, y };
+    flushMoveQueue();
+  }
+
+  function waitForMoveQueue(): Promise<void> {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (!moveInFlight && !queuedPosition) {
+          resolve();
+          return;
+        }
+        window.setTimeout(check, 4);
+      };
+
+      check();
+    });
+  }
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+
+    const tick = () => {
+      if (settled) return;
+
+      void getPointerState()
+        .then(async (pointer) => {
+          if (!pointer?.leftPressed) {
+            settled = true;
+            await waitForMoveQueue();
+            resolve();
+            return;
+          }
+
+          const dx = pointer.x - startPointer.x;
+          const dy = pointer.y - startPointer.y;
+          if (!activated && Math.hypot(dx, dy) >= activationDistance) {
+            activated = true;
+            options.onActivated?.();
+          }
+
+          if (activated) {
+            const x = Math.round(startPosition.x + dx);
+            const y = Math.round(startPosition.y + dy);
+            queueMove(x, y);
+          }
+
+          window.setTimeout(tick, 7);
+        })
+        .catch(() => {
+          settled = true;
+          resolve();
+        });
+    };
+
+    tick();
+  });
+
+  if (!activated) return { activated, edge: null };
+
+  const edge = await snapWindowToScreenEdge(visibleStripForPet(petSize), petSize);
+  return { activated, edge };
 }
 
 export async function walkAppWindowRandomly(

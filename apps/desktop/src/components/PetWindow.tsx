@@ -6,11 +6,11 @@ import type { Translations } from "../i18n";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
 import { PetRenderer } from "../pet/PetRenderer";
 import {
-  armWindowEdgeSnap,
+  dragWindowWithPointer,
   peekWindowFromScreenEdge,
   snapWindowToScreenEdge,
-  startWindowDrag,
   visibleStripForPet,
+  type ScreenEdge,
 } from "../tauri/tauriClient";
 
 type PetWindowProps = {
@@ -23,6 +23,7 @@ type PetWindowProps = {
   computerLabels: Translations["computer"];
   labels: Translations["pet"];
   petSize: number;
+  petDisplayName?: string;
   busy: boolean;
   toolbarHidden: boolean;
   onClickPet: () => void;
@@ -33,6 +34,8 @@ type PetWindowProps = {
   onCancelComputerTask: () => void;
   onRotatePet: (delta: number) => void;
   onToggleToolbar: () => void;
+  onToolbarActivity: () => void;
+  onTuckedEdgeChange: (edge: ScreenEdge | null) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 };
@@ -70,6 +73,7 @@ export function PetWindow({
   computerLabels,
   labels,
   petSize,
+  petDisplayName,
   busy,
   toolbarHidden,
   onClickPet,
@@ -80,60 +84,78 @@ export function PetWindow({
   onCancelComputerTask,
   onRotatePet,
   onToggleToolbar,
+  onToolbarActivity,
+  onTuckedEdgeChange,
   onDragStart,
   onDragEnd,
 }: PetWindowProps) {
-  const dragTimerRef = useRef<number | null>(null);
+  const dragPointerIdRef = useRef<number | null>(null);
+  const dragInFlightRef = useRef(false);
   const dragStartedRef = useRef(false);
   const rotatePointerIdRef = useRef<number | null>(null);
   const rotateLastPointRef = useRef({ x: 0, y: 0 });
-  const [edgeTucked, setEdgeTucked] = useState(false);
+  const [tuckedEdge, setTuckedEdge] = useState<ScreenEdge | null>(null);
+  const tuckRotationYaw =
+    tuckedEdge === "left" ? Math.PI / 4 : tuckedEdge === "right" ? -Math.PI / 4 : rotationYaw;
 
-  async function beginDrag() {
-    dragStartedRef.current = true;
-    setEdgeTucked(false);
-    onDragStart();
-    const cleanupEdgeSnap = await armWindowEdgeSnap(petSize);
-    await startWindowDrag().finally(() => {
-      cleanupEdgeSnap();
-      void snapWindowToScreenEdge(visibleStripForPet(petSize), petSize).then((edge) => {
-        setEdgeTucked(Boolean(edge));
-      });
-      onDragEnd();
-    });
+  function updateTuckedEdge(edge: ScreenEdge | null) {
+    setTuckedEdge(edge);
+    onTuckedEdgeChange(edge);
   }
 
-  function clearDragTimer() {
-    if (dragTimerRef.current) {
-      window.clearTimeout(dragTimerRef.current);
-      dragTimerRef.current = null;
+  function releaseDragPointer(event: PointerEvent<HTMLButtonElement>) {
+    if (dragPointerIdRef.current !== event.pointerId) return;
+    dragPointerIdRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  async function trackDrag() {
+    if (dragInFlightRef.current) return;
+    dragInFlightRef.current = true;
+    dragStartedRef.current = false;
+
+    const result = await dragWindowWithPointer(petSize, {
+      activationDistance: 2,
+      onActivated: () => {
+        if (dragStartedRef.current) return;
+        dragStartedRef.current = true;
+        updateTuckedEdge(null);
+        onDragStart();
+      },
+    }).catch(() => ({ activated: false, edge: null }));
+
+    if (result.activated) {
+      updateTuckedEdge(result.edge);
+      onDragEnd();
+    } else {
+      if (tuckedEdge) {
+        updateTuckedEdge(null);
+      }
+      onClickPet();
     }
   }
 
   function handlePointerDown(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0) return;
-    dragStartedRef.current = false;
-    clearDragTimer();
-    dragTimerRef.current = window.setTimeout(() => {
-      dragTimerRef.current = null;
-      void beginDrag();
-    }, 180);
-  }
-
-  function handlePointerUp() {
-    const wasDragging = dragStartedRef.current;
-    clearDragTimer();
-    dragStartedRef.current = false;
-    if (!wasDragging) {
-      onClickPet();
-    }
+    if (dragInFlightRef.current) return;
+    event.preventDefault();
+    onToolbarActivity();
+    dragPointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    void trackDrag().finally(() => {
+      dragInFlightRef.current = false;
+      dragStartedRef.current = false;
+      dragPointerIdRef.current = null;
+    });
   }
 
   function handleRotatePointerDown(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0) return;
+    onToolbarActivity();
     event.preventDefault();
     event.stopPropagation();
-    clearDragTimer();
     dragStartedRef.current = false;
     rotatePointerIdRef.current = event.pointerId;
     rotateLastPointRef.current = { x: event.clientX, y: event.clientY };
@@ -161,15 +183,24 @@ export function PetWindow({
   }
 
   async function handleMouseEnter() {
-    await peekWindowFromScreenEdge(petSize);
-    setEdgeTucked(false);
+    const edge = await peekWindowFromScreenEdge(petSize);
+    if (edge && edge !== tuckedEdge) {
+      updateTuckedEdge(edge);
+    }
+  }
+
+  async function handleMouseLeave() {
+    if (!tuckedEdge) return;
+    const edge = await snapWindowToScreenEdge(visibleStripForPet(petSize), petSize, true);
+    updateTuckedEdge(edge ?? tuckedEdge);
   }
 
   return (
     <section
-      className={`pet-window${edgeTucked ? " edge-tucked" : ""}`}
+      className={`pet-window${tuckedEdge ? ` edge-tucked edge-${tuckedEdge}` : ""}`}
       style={{ "--pet-size": `${petSize}px`, "--pet-accent": petAccentColor(pack) } as CSSProperties}
       onMouseEnter={() => void handleMouseEnter()}
+      onMouseLeave={() => void handleMouseLeave()}
     >
       {computerTask ? (
         <ComputerTaskBubble
@@ -189,18 +220,16 @@ export function PetWindow({
           type="button"
           title={labels.drag}
           onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={() => {
-            clearDragTimer();
-            dragStartedRef.current = false;
-          }}
+          onPointerUp={releaseDragPointer}
+          onPointerCancel={releaseDragPointer}
         >
           <PetRenderer
             pack={pack}
             action={action}
             actionToken={actionToken}
-            rotationYaw={rotationYaw}
+            rotationYaw={tuckRotationYaw}
             autoRotate={false}
+            followPointer={!tuckedEdge}
           />
         </button>
         <button
@@ -216,27 +245,63 @@ export function PetWindow({
       </div>
 
       {toolbarHidden ? (
-        <button className="pet-toolbar-reveal" type="button" title={labels.showToolbar} onClick={onToggleToolbar}>
+        <button
+          className="pet-toolbar-reveal"
+          type="button"
+          title={labels.showToolbar}
+          onClick={() => {
+            onToolbarActivity();
+            onToggleToolbar();
+          }}
+        >
           <MoreHorizontal size={18} />
         </button>
       ) : (
         <nav className="pet-toolbar">
-          <button type="button" title={labels.openChat} onClick={onOpenChat}>
+          <button
+            type="button"
+            title={labels.openChat}
+            onClick={() => {
+              onToolbarActivity();
+              onOpenChat();
+            }}
+          >
             <MessageCircle size={17} />
           </button>
-          <button type="button" title={labels.openSettings} onClick={onOpenSettings}>
+          <button
+            type="button"
+            title={labels.openSettings}
+            onClick={() => {
+              onToolbarActivity();
+              onOpenSettings();
+            }}
+          >
             <Settings size={17} />
           </button>
-          <button type="button" title={labels.hideToolbar} onClick={onToggleToolbar}>
+          <button
+            type="button"
+            title={labels.hideToolbar}
+            onClick={() => {
+              onToolbarActivity();
+              onToggleToolbar();
+            }}
+          >
             <PanelBottomClose size={17} />
           </button>
-          <button type="button" title={labels.hidePet} onClick={onHide}>
+          <button
+            type="button"
+            title={labels.hidePet}
+            onClick={() => {
+              onToolbarActivity();
+              onHide();
+            }}
+          >
             <EyeOff size={17} />
           </button>
         </nav>
       )}
 
-      {pack ? <span className="pet-name">{pack.name}</span> : null}
+      {petDisplayName || pack?.name ? <span className="pet-name">{petDisplayName || pack?.name}</span> : null}
     </section>
   );
 }

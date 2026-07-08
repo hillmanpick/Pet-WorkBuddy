@@ -1,101 +1,123 @@
 # WorkBuddy
 
-WorkBuddy 是一个开源 AI 桌面宠物项目。它不是网页玩具，也不是 Electron 应用，而是基于 Tauri + Rust 的真实桌面应用：宠物常驻桌面，用户自备 API Key，可以聊天、执行快捷指令、处理简单电脑任务，并支持替换 3D 宠物模型。
+WorkBuddy is an open-source AI desktop pet built with Tauri, Rust, React, and TypeScript. It keeps the desktop-pet feeling, while also adding a local Agent runtime that can chat, use configured AI providers, call local tools, and operate the computer after user authorization.
 
-WorkBuddy is an open-source AI desktop pet built with Tauri, Rust, React, and TypeScript. Users bring their own API keys, configure model IDs locally, install custom pet packs, and use the pet as a small desktop companion for chat, quick commands, and confirmed local computer-control tasks.
+WorkBuddy 是一个开源 AI 桌面宠物项目。它不是网页版，也不是 Electron 应用，而是基于 Tauri + Rust 的真实桌面应用：桌宠常驻桌面，用户自己配置 API Key 和模型 ID，可以聊天、上传图片/文件、执行快捷指令，并在授权后调用本地工具完成电脑任务。
 
 > WorkBuddy is not affiliated with Tencent, WeChat, OpenAI, Anthropic, DeepSeek, Kenney, or any other third-party brand mentioned in this repository.
 
 ## Highlights
 
-- Desktop-first: Tauri + Rust, no Electron.
-- Transparent draggable pet window with edge tuck and hover peek behavior.
-- 3D GLB/GLTF pet packs with custom animations and event mapping.
-- Chat input below the pet, AI replies and task prompts shown as pet bubbles.
-- Global shortcuts and user-defined quick commands.
-- Configurable providers: ChatGPT/OpenAI-compatible API, Claude, and DeepSeek/OpenAI-compatible API.
-- Configurable model IDs, base URLs, temperature, token limits, and system prompts.
-- API keys are stored only on the user's local machine through the OS keychain.
-- Local computer-control Agent with structured actions, execution review, and authorization modes.
-- Launch-on-startup toggle, bilingual UI, and independent settings window.
+- Real desktop app: Tauri + Rust, no Electron.
+- Transparent 3D desktop pet with drag, rotate, resize, edge tuck, hover peek, and system tray restore.
+- Pet bubbles above the character, compact chat input below the pet, and customizable chat box colors.
+- Custom pet names, bilingual UI, global shortcuts, quick commands, and startup launch toggle.
+- Bring-your-own-key providers: ChatGPT/OpenAI-compatible, Claude, and DeepSeek/OpenAI-compatible.
+- Model IDs, base URLs, temperature, token limits, and system prompts are configurable.
+- API keys are stored locally through the OS keychain.
+- Image/file upload, drag-and-drop, and clipboard paste into chat.
+- Codex-style local Agent runtime with plugin tools, risk levels, confirmation flow, and execution logs.
+- Custom GLB/GLTF pet packs with animation and event mapping.
 
-## Table Of Contents
+## Contents
 
-- [Chinese](#chinese)
+- [中文说明](#中文说明)
 - [English](#english)
 - [License](#license)
 
-## Chinese
+## 中文说明
 
 ### 项目定位
 
-WorkBuddy 的目标是做一个开源的 AI 桌面伙伴：它既有类似桌面宠物的陪伴感，也能在用户授权后执行一些本地电脑任务。它更接近“桌面 Agent + 宠物界面”，不是单纯聊天窗口，也不是固定命令玩具。
+WorkBuddy 的目标是做一个开源的 AI 桌面伙伴：它既有类似桌面宠物的陪伴感，也能在用户授权后执行本地电脑任务。它更接近“桌面宠物界面 + 本地 Agent Runtime”，不是单纯聊天窗口，也不是固定命令玩具。
 
 当前项目重点：
 
-- 桌面体验：透明窗口、拖动、贴边隐藏、宠物气泡、系统托盘。
-- AI 聊天：用户自己配置 API Key 和模型 ID。
-- 桌面任务：通过本地 Rust 工具执行打开应用、搜索网页、整理文件、复制粘贴、创建文档等操作。
-- 安全控制：敏感操作必须经过授权，执行结果会回传给 Agent 复盘。
-- 可扩展宠物：用户可以替换自己的 GLB/GLTF 模型和动画映射。
+- 桌宠体验：透明窗口、拖动、单独旋转手柄、贴边隐藏、45 度探头、气泡回复、系统托盘。
+- AI 聊天：用户自己配置 API Key、Base URL、模型 ID 和系统提示词。
+- 多模态输入：支持上传、拖拽、粘贴图片和文件，图片可发给支持视觉的模型识别。
+- 本地任务：通过插件化工具执行打开应用、打开网页、剪贴板、文件整理、终端命令、截图、Office 文档等能力。
+- 安全控制：敏感操作有授权模式、气泡确认和执行日志。
+- 宠物扩展：用户可以替换自己的 GLB/GLTF 模型和动画映射。
 
-### 功能
+### 桌宠功能
 
-#### 桌面宠物
-
-- 透明、可拖动、可置顶的桌面宠物窗口。
-- 拖到屏幕边缘后缩进屏幕，只露出一部分宠物，鼠标移过去会探出。
-- 宠物本体可拖动，右上角小球单独控制旋转。
+- 透明、置顶、可拖动的桌面宠物窗口。
+- 拖到屏幕边缘后缩进屏幕，只露出一部分；鼠标移过去会探头出来，移开后缩回去。
+- 宠物主体可拖动，右上角小球单独控制 360 度旋转。
 - 点击宠物会随机触发不同动作和气泡台词。
-- 长时间未互动后，宠物会在屏幕内随机走动。
-- 可隐藏操作栏，可调节宠物大小。
-- 支持中英文界面切换。
+- 超过一段时间未互动后，宠物会在屏幕内随机移动。
+- 支持调节宠物大小、自定义宠物名字、中英文切换。
+- 支持视觉跟随鼠标，宠物会轻微朝向鼠标。
+- 主窗口隐藏在系统托盘，不占 Windows 任务栏；双击托盘图标可重新显示宠物。
 
-#### 聊天与快捷指令
+### 聊天功能
 
 - 宠物下方只显示输入框。
-- AI 回复显示为宠物上方气泡。
+- AI 回复显示为宠物正上方的气泡，不遮挡宠物本体。
+- 可在设置里切换聊天框颜色。
+- 支持上传图片和文件，也支持拖拽文件/图片、从剪贴板粘贴图片。
+- 聊天记录保存在本地，并可在设置里按日期查看，带时间戳。
 - 支持自定义快捷指令和全局快捷键。
-- 设置窗口独立打开，不会把宠物移动到屏幕中央。
-- 聊天记录可在设置里按日期查看，带时间戳。
 
-#### 模型服务
+### 模型服务
 
-内置三类 Provider：
+WorkBuddy 默认内置三类 Provider。所有模型 ID 都可以在设置中修改。
 
 | Provider | 默认名称 | 默认模型 ID | 说明 |
 | --- | --- | --- | --- |
-| OpenAI-compatible | ChatGPT | `gpt-5.5` | 支持 OpenAI 兼容 Chat Completions API |
+| OpenAI-compatible | ChatGPT | `gpt-5.5` | 使用 OpenAI 兼容 Chat Completions API |
 | Anthropic | Claude | `claude-4.7` | 使用 Anthropic Messages API |
-| OpenAI-compatible | DeepSeek | `deepseek-v4-pro` | 支持 DeepSeek/OpenAI 兼容 API |
+| OpenAI-compatible | DeepSeek | `deepseek-v4-pro` | 使用 DeepSeek/OpenAI 兼容 API |
 
-所有模型 ID 都可以在设置里修改。WorkBuddy 不提供内置商业 API Key，用户需要自己配置。
+WorkBuddy 不提供商业 API Key。用户需要自己在设置里配置 Key，Key 只保存在本机系统钥匙串。
 
-#### 电脑任务 Agent
+### Codex 式本地 Agent Runtime
 
-WorkBuddy 可以把自然语言任务转换为结构化本地动作，并交给 Rust 后端执行。执行后，WorkBuddy 会把每一步结果回传给 Agent 复盘；如果无法确认完成，会继续规划补救动作、要求用户接手，或者报告失败，不会只因为动作已经发出就标记完成。
+WorkBuddy 的插件不是普通 UI 插件，而是 Agent Tool 插件。每个插件把一类电脑能力封装成 AI 可调用的工具，Agent 负责理解任务、选择工具、执行、观察结果、继续执行，直到任务完成或需要用户接手。
 
-当前支持的本地动作：
+架构大致如下：
 
-- 打开应用：微信、WPS、Word、资源管理器、记事本、计算器、画图、系统设置、截图工具。
-- 打开文件夹：桌面、下载、文档、图片、音乐、视频、用户目录。
-- 打开网页和搜索网页。
-- 复制文字到剪贴板。
-- 向当前光标位置粘贴文字。
-- 新建记事本笔记。
-- 创建 Word 兼容文档并用 WPS/Word 打开。
-- 整理常用文件夹，把第一层文件按类型移动到 `WorkBuddy Organized`。
-- 设置本地提醒/倒计时。
-- 准备微信消息：打开微信、搜索联系人、填入消息，发送前再次确认。
-- 执行 PowerShell 命令，默认视为敏感操作。
+```text
+桌宠 UI
+  -> 自然语言命令框
+  -> Agent Runtime
+  -> 插件管理器 / MCP Client 边界
+  -> 工具插件：filesystem / terminal / browser / app / screen / clipboard / office / confirm
+  -> Tauri Rust 后端
+  -> 真实电脑操作
+```
 
-示例：
+每个工具会声明：
+
+- 工具名称
+- 描述
+- 参数 schema
+- 所需权限
+- 风险等级
+- 执行结果
+
+高风险操作会走确认流程，并写入本地执行日志。设置里的 Agent 页面可以查看内置工具、MCP 配置、最大复盘轮数和执行日志。
+
+当前内置工具：
+
+| 插件 | 能力 |
+| --- | --- |
+| `filesystem` | 列目录、搜索文件、读文件、写文件、复制、移动、删除到回收站 |
+| `terminal` | 运行 PowerShell/cmd/git/npm/python，带超时、输出截断和风险标记 |
+| `browser` | 打开网页，浏览器自动化接口预留给 Playwright/MCP sidecar |
+| `app` | 打开微信、浏览器、VS Code、记事本、WPS/Word、指定文件 |
+| `screen` | 截图、点击坐标、快捷键、向当前焦点输入文本，OCR 接口预留 |
+| `clipboard` | 读写剪贴板、粘贴文本 |
+| `office` | 创建 Word 兼容文档并打开 |
+| `confirm` | Host 侧敏感操作确认 |
+
+示例任务：
 
 ```text
 帮我打开微信
 帮我给张三发微信：今晚七点吃饭
 打开浏览器进入百度，然后搜索 csdn
-打开下载文件夹
 复制：这段文字放到剪贴板
 帮我输入：这是一段测试文字
 新建笔记：今天要检查打包流程
@@ -107,29 +129,27 @@ WorkBuddy 可以把自然语言任务转换为结构化本地动作，并交给 
 
 ### 授权模式
 
-WorkBuddy 提供三档电脑任务授权：
-
 | 模式 | 行为 |
 | --- | --- |
-| 完全授权 | 普通和敏感任务都会自动执行，包括整理文件、shell 命令、发送前最后一步等。只建议在完全信任当前环境时开启。 |
-| 敏感操作询问 | 普通任务自动执行，整理文件、发送消息、shell 命令等敏感任务会等待用户确认。 |
+| 完全授权 | 普通和敏感任务都会自动执行。只建议在完全信任当前环境时开启。 |
+| 敏感操作询问 | 普通任务自动执行，整理文件、发送消息、终端命令等敏感任务会等待用户确认。 |
 | 拒绝敏感操作 | 普通任务可以执行，敏感任务直接拦截。 |
 
 默认推荐使用“敏感操作询问”。
 
 ### 安全边界
 
-- WorkBuddy 不接入微信官方 API。
-- 微信相关任务使用本地桌面自动化，不会绕过登录、验证码或平台风控。
+- WorkBuddy 不是微信官方 API 集成。
+- 微信相关任务使用本地桌面自动化，不绕过登录、验证码或平台风控。
 - WorkBuddy 不会偷取凭证、绕过权限弹窗、隐藏执行过程或上传本地隐私文件。
-- 整理文件夹会移动文件，请确认任务计划后再执行。
-- shell 命令属于敏感操作，默认需要确认。
-- 打开网页只能确认系统已请求默认浏览器打开，不能证明页面已加载完成；这种情况会提示用户检查。
+- 文件整理会移动文件，请确认计划后再执行。
+- 终端命令属于敏感操作，默认需要确认。
+- 打开网页只能说明系统接受了打开请求，不代表页面已经加载完成。
 - 本地提醒只在 WorkBuddy 当前运行期间有效。
 
 ### 快速开始
 
-#### 环境要求
+环境要求：
 
 - Windows 10/11
 - Node.js 20+
@@ -137,17 +157,19 @@ WorkBuddy 提供三档电脑任务授权：
 - Rust
 - Windows MSVC Build Tools
 
-#### 安装依赖
+安装依赖：
 
 ```powershell
 pnpm install
 ```
 
-#### 本地运行桌面版
+本地运行桌面版：
 
 ```powershell
 pnpm desktop
 ```
+
+如果 `5175` 端口被占用，先关闭占用端口的 Vite 进程，或改 Tauri 配置里的 `devPath` 和 Vite 端口。
 
 前端预览：
 
@@ -155,9 +177,7 @@ pnpm desktop
 pnpm dev
 ```
 
-Vite 开发服务器默认使用 `127.0.0.1:5175`。
-
-#### 打包安装包
+### 打包
 
 ```powershell
 pnpm desktop:pack
@@ -169,7 +189,7 @@ pnpm desktop:pack
 apps/desktop/src-tauri/target/release/bundle/
 ```
 
-Windows 用户也可以直接运行：
+Windows 辅助命令文件：
 
 - `dev.bat`: 启动桌面开发环境。
 - `build.bat`: 打包桌面应用。
@@ -177,7 +197,7 @@ Windows 用户也可以直接运行：
 
 PowerShell 脚本位于 `scripts/`。
 
-### 宠物包
+### 宠物模型
 
 默认宠物包位于：
 
@@ -186,7 +206,7 @@ pet-packs/
 apps/desktop/public/pet-packs/
 ```
 
-每个宠物包通常包含：
+宠物包通常包含：
 
 ```text
 pet.json
@@ -196,7 +216,7 @@ Textures/
 LICENSE-KENNEY.txt
 ```
 
-`pet.json` 用来描述模型文件、预览图、默认动作、动画映射和事件动作。示例：
+`pet.json` 示例：
 
 ```json
 {
@@ -219,22 +239,9 @@ LICENSE-KENNEY.txt
 }
 ```
 
-把新的宠物包加入 `apps/desktop/public/pet-packs/manifest.json` 后，即可在设置里选择。
+把新宠物包加入 `apps/desktop/public/pet-packs/manifest.json` 后，就可以在设置里选择。
 
 默认宠物资源来自 Kenney Cube Pets，资源为 CC0。详情见 `THIRD_PARTY_NOTICES.md`。
-
-### 项目结构
-
-```text
-apps/desktop              Tauri + React 桌面应用
-apps/desktop/src          React 前端
-apps/desktop/src-tauri    Rust/Tauri 后端
-apps/desktop/public       前端静态资源和宠物包
-docs                      开发文档
-packages                  共享包边界
-pet-packs                 可分发宠物包源文件
-scripts                   Windows/PowerShell 辅助脚本
-```
 
 ### 常用命令
 
@@ -248,29 +255,24 @@ pnpm typecheck
 
 开发细节见 [docs/development.md](docs/development.md)。
 
-### 贡献
+### 项目结构
 
-欢迎提交 Issue 和 Pull Request。比较适合贡献的方向：
-
-- 新宠物包和动画映射。
-- 更可靠的桌面操作工具。
-- 更细粒度的安全授权策略。
-- 更好的设置页和快捷键体验。
-- 多平台适配。
-- 文档和示例任务。
-
-提交前建议运行：
-
-```powershell
-pnpm build
-cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+```text
+apps/desktop              Tauri + React 桌面应用
+apps/desktop/src          React 前端
+apps/desktop/src-tauri    Rust/Tauri 后端
+apps/desktop/public       静态资源和宠物包
+docs                      开发文档
+packages                  共享包边界
+pet-packs                 可分发宠物包源文件
+scripts                   Windows/PowerShell 辅助脚本
 ```
 
 ## English
 
 ### What Is WorkBuddy?
 
-WorkBuddy is an open-source AI desktop pet. It runs as a real desktop application powered by Tauri and Rust. Users bring their own API keys, configure model providers locally, and use a small animated pet for chat, quick prompts, and approved local computer-control tasks.
+WorkBuddy is an open-source AI desktop pet. It runs as a real desktop application powered by Tauri and Rust. Users bring their own API keys, configure model providers locally, install custom pet packs, and use a small animated companion for chat, quick commands, and approved local computer-control tasks.
 
 It is not a web demo and not an Electron app. The desktop target is Tauri/Rust only.
 
@@ -279,15 +281,18 @@ It is not a web demo and not an Electron app. The desktop target is Tauri/Rust o
 - Transparent draggable desktop pet window.
 - Edge tuck: move the pet to a screen edge and it hides partly off-screen; hover to peek it back out.
 - Separate drag and rotate controls.
-- Pet speech bubbles for AI replies and computer-task confirmations.
+- AI replies appear as speech bubbles above the pet instead of covering it.
+- Compact chat input below the pet.
+- Customizable chat box colors.
+- Image/file upload, drag-and-drop, and clipboard paste.
+- Custom pet name, pet size, Chinese/English UI, and launch-on-startup toggle.
+- Visual pointer follow for the 3D pet.
 - Global shortcuts and custom quick commands.
 - Independent settings window.
-- Chinese and English UI.
-- Launch-on-startup toggle.
 - GLB/GLTF pet packs with animation and event mapping.
 - Local API key storage through the operating system keychain.
 - Configurable provider base URLs, model IDs, temperatures, token limits, and system prompts.
-- Computer-control Agent with structured actions, execution review, and configurable authorization modes.
+- Codex-style local Agent runtime with plugin tools, execution review, authorization modes, and audit logs.
 
 ### Supported Providers
 
@@ -299,22 +304,45 @@ It is not a web demo and not an Electron app. The desktop target is Tauri/Rust o
 
 All model IDs are configurable in settings. WorkBuddy does not ship with commercial API keys.
 
-### Computer Control
+### Codex-Style Local Agent Runtime
 
-WorkBuddy can turn a natural-language task into a structured action plan and execute it through local Rust tools. After execution, the result of each step is passed back to the Agent supervisor. WorkBuddy marks a task complete only when the result can support that conclusion; otherwise it continues, asks the user to take over, or reports failure.
+WorkBuddy can turn a natural-language task into plugin tool calls and execute them through local Rust tools. After execution, the result of each step is passed back to the Agent supervisor. WorkBuddy marks a task complete only when the result supports that conclusion; otherwise it continues, asks the user to take over, or reports failure.
 
-Supported local actions include:
+Runtime shape:
 
-- Open whitelisted apps.
-- Open common user folders.
-- Open websites and web searches.
-- Copy and paste text.
-- Create Notepad notes.
-- Create Word-compatible documents and open them with WPS/Word.
-- Organize common folders into `WorkBuddy Organized`.
-- Set local reminders.
-- Prepare WeChat messages with final confirmation before sending.
-- Run PowerShell commands as sensitive actions.
+```text
+Pet UI
+  -> Natural-language command box
+  -> Agent Runtime
+  -> Plugin manager / MCP Client boundary
+  -> Tool plugins: filesystem / terminal / browser / app / screen / clipboard / office / confirm
+  -> Tauri Rust backend
+  -> Real computer operation
+```
+
+Each tool declares:
+
+- name
+- description
+- input schema
+- required permissions
+- risk level
+- structured result
+
+High-risk tools go through confirmation and are recorded in a local audit log.
+
+Built-in tools:
+
+| Plugin | Capabilities |
+| --- | --- |
+| `filesystem` | list directories, search, read, write, copy, move, delete to recycle bin |
+| `terminal` | run PowerShell/cmd/git/npm/python with timeout and output truncation |
+| `browser` | open web pages; Playwright/MCP automation is reserved for a sidecar |
+| `app` | open apps and files |
+| `screen` | screenshots, coordinate clicks, hotkeys, focused text input; OCR interface reserved |
+| `clipboard` | read, write, paste text |
+| `office` | create Word-compatible documents |
+| `confirm` | host-enforced confirmation for risky actions |
 
 Authorization modes:
 

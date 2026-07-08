@@ -1,6 +1,18 @@
 import type { AiProvider, AiProviderInput, ChatResponse } from "./AiProvider";
-import { assertApiKey, toProviderMessages } from "./AiProvider";
-import type { ProviderId } from "../config/schema";
+import { assertApiKey, textWithAttachments } from "./AiProvider";
+import type { ChatMessage, ProviderId } from "../config/schema";
+
+type OpenAIMessageContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    >;
+
+type OpenAIChatMessage = {
+  role: ChatMessage["role"];
+  content: OpenAIMessageContent;
+};
 
 export class OpenAIProvider implements AiProvider {
   id: ProviderId = "openai";
@@ -12,7 +24,7 @@ export class OpenAIProvider implements AiProvider {
     const endpoint = `${input.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
     const messages = [
       { role: "system", content: input.config.systemPrompt },
-      ...toProviderMessages(input.messages),
+      ...toOpenAIMessages(input.messages),
     ];
 
     const response = await fetch(endpoint, {
@@ -43,4 +55,31 @@ export class OpenAIProvider implements AiProvider {
     const result = await this.chat(input);
     input.onDelta(result.text);
   }
+}
+
+function toOpenAIMessages(messages: ChatMessage[]): OpenAIChatMessage[] {
+  return messages
+    .filter((message) => message.role !== "system")
+    .map((message) => {
+      const imageAttachments = (message.attachments ?? []).filter(
+        (attachment) => attachment.kind === "image" && attachment.dataUrl,
+      );
+      if (message.role !== "user" || !imageAttachments.length) {
+        return {
+          role: message.role,
+          content: textWithAttachments(message),
+        };
+      }
+
+      return {
+        role: message.role,
+        content: [
+          { type: "text", text: textWithAttachments(message) || "Please analyze the attached image." },
+          ...imageAttachments.map((attachment) => ({
+            type: "image_url" as const,
+            image_url: { url: attachment.dataUrl ?? "" },
+          })),
+        ],
+      };
+    });
 }

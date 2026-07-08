@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { attachmentSizeLabel } from "../chat/AttachmentProcessor";
 import { loadChatHistory } from "../chat/ChatStore";
 import type { ChatMessage } from "../config/schema";
 import type { Translations } from "../i18n";
@@ -77,6 +78,17 @@ export function ChatHistorySettings({ labels }: ChatHistorySettingsProps) {
                         <time dateTime={new Date(message.createdAt).toISOString()}>{timeKey(message.createdAt)}</time>
                       </header>
                       <p>{message.content}</p>
+                      {message.attachments?.length ? (
+                        <div className="chat-history-attachments">
+                          {message.attachments.map((attachment) => (
+                            <span className={`chat-history-attachment ${attachment.kind}`} key={attachment.id}>
+                              {attachment.kind === "image" && attachment.dataUrl ? <img src={attachment.dataUrl} alt="" /> : null}
+                              <span>{attachment.name}</span>
+                              <small>{attachmentSizeLabel(attachment.size)}</small>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                     </article>
                   ))}
                 </div>

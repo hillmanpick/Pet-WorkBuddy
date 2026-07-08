@@ -1,7 +1,10 @@
 import type { UiLanguage } from "../config/schema";
+import { executeToolCall } from "../agent/tools/ToolRegistry";
+import type { AgentToolCall } from "../agent/tools/ToolTypes";
 import { invokeCommand, isTauriRuntime } from "../tauri/tauriClient";
 
 export type ComputerAction =
+  | { type: "tool_call"; call: AgentToolCall }
   | { type: "open_app"; app: string }
   | { type: "open_folder"; folder: string }
   | { type: "organize_folder"; folder: string }
@@ -111,6 +114,9 @@ export function createComputerTaskPlan(text: string, language: UiLanguage): Comp
   const pasteText = parsePasteText(prompt);
   if (pasteText) return createPastePlan(pasteText, language);
 
+  const firstResultSearch = parseSearchFirstResult(prompt);
+  if (firstResultSearch) return createSearchFirstResultPlan(firstResultSearch.query, firstResultSearch.engine, language);
+
   const search = parseSearch(prompt);
   if (search) return createSearchPlan(search.query, search.engine, language);
 
@@ -133,6 +139,9 @@ export function createPriorityComputerTaskPlan(text: string, language: UiLanguag
   const prompt = text.trim();
   if (!prompt) return null;
 
+  const firstResultSearch = parseSearchFirstResult(prompt);
+  if (firstResultSearch) return createSearchFirstResultPlan(firstResultSearch.query, firstResultSearch.engine, language);
+
   const search = parseSearch(prompt);
   if (search) return createSearchPlan(search.query, search.engine, language);
 
@@ -142,12 +151,25 @@ export function createPriorityComputerTaskPlan(text: string, language: UiLanguag
   return null;
 }
 
-export async function executeComputerActions(actions: ComputerAction[]): Promise<ActionResult[]> {
+export async function executeComputerActions(actions: ComputerAction[], taskId = "manual-task"): Promise<ActionResult[]> {
   if (!isTauriRuntime()) {
     throw new Error("Computer control is only available in the desktop app.");
   }
 
-  return invokeCommand<ActionResult[]>("execute_computer_actions", { actions });
+  const results: ActionResult[] = [];
+  for (const [index, action] of actions.entries()) {
+    if (action.type === "tool_call") {
+      const result = await executeToolCall(taskId, action.call, true);
+      results.push({ index, ok: result.ok, message: result.message });
+    } else {
+      const [result] = await invokeCommand<ActionResult[]>("execute_computer_actions", { actions: [action] });
+      results.push(result ? { ...result, index } : { index, ok: false, message: "No result returned." });
+    }
+
+    if (!results[results.length - 1].ok) break;
+  }
+
+  return results;
 }
 
 function createOpenAppPlan(app: AppAlias, language: UiLanguage): ComputerTaskPlan {
@@ -228,6 +250,34 @@ function createSearchPlan(query: string, engine: "bing" | "baidu", language: UiL
     sensitivity: "normal",
     steps: [zh ? "打开浏览器搜索结果页" : "Open the search results in the browser"],
     actions: [{ type: "open_url", url }],
+    completionMode: "needs_user_check",
+  };
+}
+
+function createSearchFirstResultPlan(query: string, engine: "bing" | "baidu", language: UiLanguage): ComputerTaskPlan {
+  const zh = language === "zh";
+  const url =
+    engine === "baidu"
+      ? `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`
+      : `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
+  const engineName = engine === "baidu" ? "Baidu" : "Bing";
+  const tabCount = engine === "baidu" ? 7 : 5;
+  return {
+    id: crypto.randomUUID(),
+    title: zh ? "搜索并打开第一个结果" : "Search and open first result",
+    summary: zh
+      ? `用 ${engineName} 搜索 ${shorten(query)}，然后尝试打开第一个搜索结果`
+      : `Search ${engineName} for ${shorten(query)}, then try to open the first result`,
+    sensitivity: "normal",
+    steps: zh
+      ? ["打开浏览器搜索结果页", "等待网页加载", "用键盘焦点移动到第一个结果", "按 Enter 打开"]
+      : ["Open the search results page", "Wait for the page to load", "Move keyboard focus to the first result", "Press Enter"],
+    actions: [
+      { type: "open_url", url },
+      { type: "wait", ms: 2400 },
+      ...Array.from({ length: tabCount }, () => ({ type: "key" as const, key: "tab" })),
+      { type: "key", key: "enter" },
+    ],
     completionMode: "needs_user_check",
   };
 }
@@ -370,6 +420,46 @@ function parseOpenUrl(text: string): string | null {
   const url = text.match(/https?:\/\/[^\s"'<>]+/i)?.[0];
   if (!url) return null;
   return /(打开|访问|浏览|open|visit|browse)/i.test(text) ? url : null;
+}
+
+function parseSearchFirstResult(text: string): { query: string; engine: "bing" | "baidu" } | null {
+  const trimmed = text.trim();
+  const wantsFirstResult =
+    /(?:点开|打开|点击|进入|open|click)\s*(?:搜索结果)?(?:的)?(?:第一个|第一条|首个|first)\s*(?:链接|结果|link|result)?/i.test(
+      trimmed,
+    ) || /(?:第一个|第一条|首个|first)\s*(?:链接|结果|link|result)/i.test(trimmed);
+  if (!wantsFirstResult) return null;
+
+  const withoutFirstResultInstruction = trimmed
+    .replace(
+      /(?:然后|并且|并|再|,|，|。)?\s*(?:点开|打开|点击|进入|open|click)\s*(?:搜索结果)?(?:的)?(?:第一个|第一条|首个|first)\s*(?:链接|结果|link|result)?.*$/i,
+      "",
+    )
+    .trim();
+  const directSearch = parseSearch(withoutFirstResultInstruction);
+  if (directSearch) return directSearch;
+
+  const explicitEngine = trimmed.match(
+    /(?:使用|用|在)?\s*(百度|baidu|必应|bing|谷歌|google).*?(?:搜索|搜一下|查询|查一下|search|look up)\s*[:：,， ]?\s*(.+?)(?:然后|并且|并|再|点开|打开|点击|进入|open|click|$)/i,
+  );
+  if (explicitEngine) {
+    const query = cleanMessage(explicitEngine[2]);
+    if (query && !/^https?:\/\//i.test(query)) {
+      return { query, engine: /(百度|baidu)/i.test(explicitEngine[1]) ? "baidu" : "bing" };
+    }
+  }
+
+  const genericSearch = trimmed.match(
+    /(?:搜索|搜一下|查询|查一下|search|look up)\s*[:：,， ]?\s*(.+?)(?:然后|并且|并|再|点开|打开|点击|进入|open|click|$)/i,
+  );
+  if (genericSearch) {
+    const query = cleanMessage(genericSearch[1]);
+    if (query && !/^https?:\/\//i.test(query)) {
+      return { query, engine: /(百度|baidu)/i.test(trimmed) ? "baidu" : "bing" };
+    }
+  }
+
+  return null;
 }
 
 function parseSearch(text: string): { query: string; engine: "bing" | "baidu" } | null {

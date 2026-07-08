@@ -1,11 +1,11 @@
 import type { Translations } from "../i18n";
-import { PromptBox } from "../chat/PromptBox";
+import { PromptBox, type ChatDraft } from "../chat/PromptBox";
 
 type ChatWindowProps = {
   busy: boolean;
   focusToken: number;
   labels: Translations["chat"];
-  onSend: (message: string) => void;
+  onSend: (message: ChatDraft) => void;
 };
 
 export function ChatWindow({
@@ -21,6 +21,9 @@ export function ChatWindow({
         focusToken={focusToken}
         placeholder={labels.placeholder}
         sendTitle={labels.send}
+        attachTitle={labels.attach}
+        removeAttachmentTitle={labels.removeAttachment}
+        attachmentWarningTitle={labels.attachmentWarning}
         onSend={onSend}
       />
     </section>

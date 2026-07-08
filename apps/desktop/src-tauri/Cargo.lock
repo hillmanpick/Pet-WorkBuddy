@@ -6200,12 +6200,14 @@ name = "workbuddy"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "encoding_rs",
  "enigo",
  "keyring",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

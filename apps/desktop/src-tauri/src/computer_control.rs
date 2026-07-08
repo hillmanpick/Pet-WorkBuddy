@@ -7,20 +7,44 @@ use std::{
 };
 
 use arboard::Clipboard;
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use encoding_rs::GBK;
+use enigo::{Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ComputerAction {
     OpenApp { app: String },
+    OpenFile { path: String },
     OpenFolder { folder: String },
     OrganizeFolder { folder: String },
     CreateWordDocument { app: String, text: String },
     OpenUrl { url: String },
     SetClipboard { text: String },
+    ClipboardReadText,
     PasteText { text: String },
     ShellCommand { command: String },
+    TerminalCommand {
+        shell: String,
+        command: String,
+        cwd: Option<String>,
+        timeout_ms: Option<u64>,
+    },
+    FsList { root: String },
+    FsSearch { root: String, query: String },
+    FsRead { path: String },
+    FsWrite { path: String, text: String },
+    FsCopy { from: String, to: String },
+    FsMove { from: String, to: String },
+    FsDeleteToRecycleBin { path: String },
+    BrowserScreenshot { url: String },
+    ScreenScreenshot,
+    ScreenOcr,
+    ScreenClick {
+        x: i32,
+        y: i32,
+        button: Option<String>,
+    },
     Hotkey { keys: Vec<String> },
     Key { key: String },
     Wait { ms: u64 },
@@ -66,13 +90,32 @@ pub fn execute_computer_actions(
 fn run_action(action: ComputerAction) -> Result<String, String> {
     match action {
         ComputerAction::OpenApp { app } => open_app(&app),
+        ComputerAction::OpenFile { path } => open_file(&path),
         ComputerAction::OpenFolder { folder } => open_folder(&folder),
         ComputerAction::OrganizeFolder { folder } => organize_folder(&folder),
         ComputerAction::CreateWordDocument { app, text } => create_word_document(&app, &text),
         ComputerAction::OpenUrl { url } => open_url(&url),
         ComputerAction::SetClipboard { text } => set_clipboard_text(&text),
+        ComputerAction::ClipboardReadText => read_clipboard_text(),
         ComputerAction::PasteText { text } => paste_text(&text),
         ComputerAction::ShellCommand { command } => run_shell_command(&command),
+        ComputerAction::TerminalCommand {
+            shell,
+            command,
+            cwd,
+            timeout_ms,
+        } => run_terminal_command(&shell, &command, cwd.as_deref(), timeout_ms.unwrap_or(30_000)),
+        ComputerAction::FsList { root } => fs_list(&root),
+        ComputerAction::FsSearch { root, query } => fs_search(&root, &query),
+        ComputerAction::FsRead { path } => fs_read(&path),
+        ComputerAction::FsWrite { path, text } => fs_write(&path, &text),
+        ComputerAction::FsCopy { from, to } => fs_copy(&from, &to),
+        ComputerAction::FsMove { from, to } => fs_move(&from, &to),
+        ComputerAction::FsDeleteToRecycleBin { path } => fs_delete_to_recycle_bin(&path),
+        ComputerAction::BrowserScreenshot { url } => browser_screenshot(&url),
+        ComputerAction::ScreenScreenshot => screen_screenshot(),
+        ComputerAction::ScreenOcr => Err("OCR is not installed yet. Add an OCR plugin or MCP server to enable screen.ocr.".to_string()),
+        ComputerAction::ScreenClick { x, y, button } => click_screen(x, y, button.as_deref()),
         ComputerAction::Hotkey { keys } => press_hotkey(&keys),
         ComputerAction::Key { key } => press_key(&key),
         ComputerAction::Wait { ms } => {
@@ -85,6 +128,8 @@ fn run_action(action: ComputerAction) -> Result<String, String> {
 fn open_app(app: &str) -> Result<String, String> {
     match app.trim().to_ascii_lowercase().as_str() {
         "wechat" => open_wechat(),
+        "browser" | "default_browser" => open_url("https://www.bing.com"),
+        "vscode" | "code" => spawn_program("code.cmd").or_else(|_| spawn_program("code.exe")),
         "wps" | "wps_writer" => open_wps_writer(),
         "word" | "winword" => open_word(),
         "explorer" => spawn_program("explorer.exe"),
@@ -95,6 +140,14 @@ fn open_app(app: &str) -> Result<String, String> {
         "screenshot" => open_system_uri("ms-screenclip:").or_else(|_| spawn_program("SnippingTool.exe")),
         value => Err(format!("Unsupported app '{}'.", value)),
     }
+}
+
+fn open_file(path: &str) -> Result<String, String> {
+    let path = path_from_input(path)?;
+    if !path.exists() {
+        return Err(format!("File does not exist: {}", path.display()));
+    }
+    open_path_with_explorer(&path)
 }
 
 fn open_url(url: &str) -> Result<String, String> {
@@ -134,7 +187,10 @@ fn powershell_single_quoted(value: &str) -> String {
 }
 
 fn open_folder(folder: &str) -> Result<String, String> {
-    let folder_path = folder_path(folder)?;
+    let folder_path = path_from_input(folder)?;
+    if !folder_path.is_dir() {
+        return Err(format!("Not a folder: {}", folder_path.display()));
+    }
     Command::new("explorer")
         .arg(&folder_path)
         .spawn()
@@ -313,6 +369,169 @@ fn folder_path(folder: &str) -> Result<PathBuf, String> {
         value => return Err(format!("Unsupported folder '{}'.", value)),
     };
     Ok(path)
+}
+
+fn path_from_input(value: &str) -> Result<PathBuf, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("Path is empty.".to_string());
+    }
+
+    if let Ok(alias) = folder_path(trimmed) {
+        return Ok(alias);
+    }
+
+    let expanded = if let Some(rest) = trimmed.strip_prefix("~/") {
+        let home = env::var("USERPROFILE").map_err(|_| "USERPROFILE is unavailable.".to_string())?;
+        PathBuf::from(home).join(rest)
+    } else {
+        PathBuf::from(trimmed)
+    };
+
+    Ok(expanded)
+}
+
+fn fs_list(root: &str) -> Result<String, String> {
+    let root = path_from_input(root)?;
+    if !root.is_dir() {
+        return Err(format!("Not a folder: {}", root.display()));
+    }
+
+    let mut items = Vec::new();
+    for entry in std::fs::read_dir(&root).map_err(|error| error.to_string())?.take(200) {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        let kind = if path.is_dir() { "dir" } else { "file" };
+        items.push(format!("{}: {}", kind, path.display()));
+    }
+
+    Ok(truncate_message(&items.join("\n"), 3000))
+}
+
+fn fs_search(root: &str, query: &str) -> Result<String, String> {
+    let root = path_from_input(root)?;
+    if !root.is_dir() {
+        return Err(format!("Not a folder: {}", root.display()));
+    }
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return Err("Search query is empty.".to_string());
+    }
+
+    let mut found = Vec::new();
+    let mut stack = vec![(root, 0usize)];
+    while let Some((folder, depth)) = stack.pop() {
+        if depth > 8 || found.len() >= 200 {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if name.contains(&query) {
+                found.push(path.display().to_string());
+                if found.len() >= 200 {
+                    break;
+                }
+            }
+            if path.is_dir() {
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+
+    if found.is_empty() {
+        Ok("no files matched".to_string())
+    } else {
+        Ok(truncate_message(&found.join("\n"), 4000))
+    }
+}
+
+fn fs_read(path: &str) -> Result<String, String> {
+    let path = path_from_input(path)?;
+    if !path.is_file() {
+        return Err(format!("Not a file: {}", path.display()));
+    }
+    let metadata = std::fs::metadata(&path).map_err(|error| error.to_string())?;
+    if metadata.len() > 512 * 1024 {
+        return Err("File is too large to read safely.".to_string());
+    }
+    let text = std::fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    Ok(truncate_message(&text, 8000))
+}
+
+fn fs_write(path: &str, text: &str) -> Result<String, String> {
+    if text.chars().count() > 200_000 {
+        return Err("Text is too long to write safely.".to_string());
+    }
+    let path = path_from_input(path)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    std::fs::write(&path, text).map_err(|error| error.to_string())?;
+    Ok(format!("wrote {}", path.display()))
+}
+
+fn fs_copy(from: &str, to: &str) -> Result<String, String> {
+    let from = path_from_input(from)?;
+    let to = path_from_input(to)?;
+    if !from.is_file() {
+        return Err(format!("Not a file: {}", from.display()));
+    }
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    std::fs::copy(&from, &to).map_err(|error| error.to_string())?;
+    Ok(format!("copied {} to {}", from.display(), to.display()))
+}
+
+fn fs_move(from: &str, to: &str) -> Result<String, String> {
+    let from = path_from_input(from)?;
+    let to = path_from_input(to)?;
+    if !from.exists() {
+        return Err(format!("Path does not exist: {}", from.display()));
+    }
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    std::fs::rename(&from, &to).map_err(|error| error.to_string())?;
+    Ok(format!("moved {} to {}", from.display(), to.display()))
+}
+
+fn fs_delete_to_recycle_bin(path: &str) -> Result<String, String> {
+    let path = path_from_input(path)?;
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+
+    let script = if path.is_dir() {
+        format!(
+            "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory({}, 'OnlyErrorDialogs', 'SendToRecycleBin')",
+            powershell_single_quoted(&path.display().to_string())
+        )
+    } else {
+        format!(
+            "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile({}, 'OnlyErrorDialogs', 'SendToRecycleBin')",
+            powershell_single_quoted(&path.display().to_string())
+        )
+    };
+
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .output()
+        .map_err(|error| error.to_string())?;
+
+    if output.status.success() {
+        Ok(format!("moved to recycle bin {}", path.display()))
+    } else {
+        Err(decode_command_output(&output.stderr).trim().to_string())
+    }
 }
 
 fn open_wechat() -> Result<String, String> {
@@ -540,11 +759,61 @@ fn set_clipboard_text(text: &str) -> Result<String, String> {
         .map_err(|error| error.to_string())
 }
 
+fn read_clipboard_text() -> Result<String, String> {
+    let mut clipboard = Clipboard::new().map_err(|error| error.to_string())?;
+    let text = clipboard.get_text().map_err(|error| error.to_string())?;
+    Ok(truncate_message(&text, 4000))
+}
+
 fn paste_text(text: &str) -> Result<String, String> {
     let _ = set_clipboard_text(text)?;
     thread::sleep(Duration::from_millis(80));
     let _ = press_hotkey(&["ctrl".to_string(), "v".to_string()])?;
     Ok("pasted text".to_string())
+}
+
+fn browser_screenshot(url: &str) -> Result<String, String> {
+    open_url(url)?;
+    open_system_uri("ms-screenclip:")
+        .or_else(|_| spawn_program("SnippingTool.exe"))
+        .map(|_| format!("opened {} and launched screenshot tool", url))
+}
+
+fn screen_screenshot() -> Result<String, String> {
+    let pictures = folder_path("pictures")?;
+    let target_dir = pictures.join("WorkBuddy Screenshots");
+    std::fs::create_dir_all(&target_dir).map_err(|error| error.to_string())?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_secs();
+    let target = unique_target_path(&target_dir.join(format!("screenshot-{timestamp}.png")));
+    let target_text = target.display().to_string();
+    let script = format!(
+        r#"
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+$bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+$graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+$bitmap.Save({}, [System.Drawing.Imaging.ImageFormat]::Png)
+$graphics.Dispose()
+$bitmap.Dispose()
+"#,
+        powershell_single_quoted(&target_text)
+    );
+
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .output()
+        .map_err(|error| error.to_string())?;
+
+    if output.status.success() {
+        Ok(format!("saved screenshot {}", target.display()))
+    } else {
+        Err(decode_command_output(&output.stderr).trim().to_string())
+    }
 }
 
 fn run_shell_command(command: &str) -> Result<String, String> {
@@ -561,8 +830,8 @@ fn run_shell_command(command: &str) -> Result<String, String> {
         .output()
         .map_err(|error| error.to_string())?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = decode_command_output(&output.stdout).trim().to_string();
+    let stderr = decode_command_output(&output.stderr).trim().to_string();
     let combined = [stdout.as_str(), stderr.as_str()]
         .into_iter()
         .filter(|value| !value.is_empty())
@@ -581,6 +850,138 @@ fn run_shell_command(command: &str) -> Result<String, String> {
     } else {
         Err(message)
     }
+}
+
+fn run_terminal_command(
+    shell: &str,
+    command: &str,
+    cwd: Option<&str>,
+    timeout_ms: u64,
+) -> Result<String, String> {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return Err("Terminal command is empty.".to_string());
+    }
+    if trimmed.chars().count() > 4000 {
+        return Err("Terminal command is too long.".to_string());
+    }
+
+    let timeout = Duration::from_millis(timeout_ms.clamp(1000, 120_000));
+    let mut cmd = match shell.trim().to_ascii_lowercase().as_str() {
+        "powershell" => {
+            let mut cmd = Command::new("powershell");
+            cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", trimmed]);
+            cmd
+        }
+        "cmd" => {
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", trimmed]);
+            cmd
+        }
+        "git" => {
+            let mut cmd = Command::new("git");
+            cmd.args(["-c", "color.ui=false"]);
+            cmd.args(split_command_args(trimmed));
+            cmd
+        }
+        "npm" => {
+            let mut cmd = Command::new("npm");
+            cmd.args(split_command_args(trimmed));
+            cmd
+        }
+        "python" => {
+            let mut cmd = Command::new("python");
+            cmd.args(split_command_args(trimmed));
+            cmd
+        }
+        value => return Err(format!("Unsupported terminal shell '{}'.", value)),
+    };
+
+    if let Some(cwd) = cwd {
+        let cwd = path_from_input(cwd)?;
+        if !cwd.is_dir() {
+            return Err(format!("cwd is not a folder: {}", cwd.display()));
+        }
+        cmd.current_dir(cwd);
+    }
+
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    let started = SystemTime::now();
+    loop {
+        if child.try_wait().map_err(|error| error.to_string())?.is_some() {
+            let output = child.wait_with_output().map_err(|error| error.to_string())?;
+            let message = command_output_message(&output.stdout, &output.stderr);
+            return if output.status.success() { Ok(message) } else { Err(message) };
+        }
+
+        if started.elapsed().map_err(|error| error.to_string())? > timeout {
+            let _ = child.kill();
+            return Err(format!("command timed out after {}ms", timeout.as_millis()));
+        }
+
+        thread::sleep(Duration::from_millis(60));
+    }
+}
+
+fn command_output_message(stdout: &[u8], stderr: &[u8]) -> String {
+    let stdout = decode_command_output(stdout).trim().to_string();
+    let stderr = decode_command_output(stderr).trim().to_string();
+    let combined = [stdout.as_str(), stderr.as_str()]
+        .into_iter()
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if combined.is_empty() {
+        "command completed".to_string()
+    } else {
+        truncate_message(&combined, 6000)
+    }
+}
+
+fn decode_command_output(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return text.to_string();
+    }
+
+    let (text, _, _) = GBK.decode(bytes);
+    text.into_owned()
+}
+
+fn split_command_args(value: &str) -> Vec<String> {
+    value
+        .split_whitespace()
+        .take(64)
+        .map(|item| item.to_string())
+        .collect()
+}
+
+fn truncate_message(value: &str, max_chars: usize) -> String {
+    if value.chars().count() > max_chars {
+        format!("{}...", value.chars().take(max_chars).collect::<String>())
+    } else {
+        value.to_string()
+    }
+}
+
+fn click_screen(x: i32, y: i32, button: Option<&str>) -> Result<String, String> {
+    let mut enigo = create_enigo()?;
+    let mouse_button = parse_mouse_button(button.unwrap_or("left"))?;
+    enigo
+        .move_mouse(x, y, Coordinate::Abs)
+        .map_err(|error| error.to_string())?;
+    enigo
+        .button(mouse_button, Direction::Click)
+        .map_err(|error| error.to_string())?;
+    Ok(format!("clicked {} at {},{}", button.unwrap_or("left"), x, y))
 }
 
 fn press_hotkey(keys: &[String]) -> Result<String, String> {
@@ -618,6 +1019,15 @@ fn press_key(key: &str) -> Result<String, String> {
 
 fn create_enigo() -> Result<Enigo, String> {
     Enigo::new(&Settings::default()).map_err(|error| error.to_string())
+}
+
+fn parse_mouse_button(value: &str) -> Result<Button, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "" | "left" => Ok(Button::Left),
+        "right" => Ok(Button::Right),
+        "middle" | "center" => Ok(Button::Middle),
+        other => Err(format!("Unsupported mouse button '{}'.", other)),
+    }
 }
 
 fn parse_key(value: &str) -> Result<Key, String> {

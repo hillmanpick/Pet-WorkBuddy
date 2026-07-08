@@ -1,13 +1,18 @@
-import type { ChatMessage, WorkBuddyConfig } from "../config/schema";
+import type { ChatAttachment, ChatMessage, WorkBuddyConfig } from "../config/schema";
 import { getProvider } from "../providers/ProviderRegistry";
 import { getApiKey } from "../settings/SettingsStore";
 
-export function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
+export function createMessage(
+  role: ChatMessage["role"],
+  content: string,
+  attachments: ChatAttachment[] = [],
+): ChatMessage {
   return {
     id: crypto.randomUUID(),
     role,
     content,
     createdAt: Date.now(),
+    attachments: attachments.length ? attachments : undefined,
   };
 }
 
@@ -28,4 +33,3 @@ export async function requestAssistantReply(
   });
   return result.text.trim();
 }
-
