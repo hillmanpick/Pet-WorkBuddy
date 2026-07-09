@@ -10,9 +10,20 @@ WorkBuddy 是一个开源 AI 桌面宠物项目。它不是网页版，也不是
 
 ## Contents
 
+- [直接下载](#直接下载)
 - [中文说明](#中文说明)
 - [English Guide](#english-guide)
 - [License](#license)
+
+## 直接下载
+
+不想拉代码或本地打包的用户，可以直接下载每个版本对应的 Windows 安装包。
+
+| Version | Windows x64 installer | Release |
+| --- | --- | --- |
+| `v0.1.0` | [WorkBuddy_0.1.0_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.0/WorkBuddy_0.1.0_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.0) |
+
+All downloadable installers are published in [GitHub Releases](https://github.com/hillmanpick/Pet-WorkBuddy/releases). Source code users can still build locally with `pnpm desktop:pack`.
 
 ## 中文说明
 
