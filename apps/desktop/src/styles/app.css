@@ -48,12 +48,12 @@ button {
   top: 12px;
   left: 50%;
   width: calc(var(--pet-size) + 92px);
-  min-height: calc(var(--pet-size) + 116px);
+  min-height: calc(var(--pet-size) + 238px);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding-top: 34px;
+  padding-top: 156px;
   transform: translateX(-50%);
   user-select: none;
 }
@@ -64,8 +64,8 @@ button {
 }
 
 .app-shell.has-floating-bubble .pet-window.edge-tucked {
-  min-height: calc(var(--pet-size) + 116px);
-  padding-top: 34px;
+  min-height: calc(var(--pet-size) + 238px);
+  padding-top: 156px;
 }
 
 .pet-stage-shell {
@@ -336,7 +336,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  top: calc(var(--pet-size) + 118px);
+  top: calc(var(--pet-size) + 242px);
   left: 50%;
   width: min(336px, calc(100% - 16px));
   height: auto;

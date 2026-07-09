@@ -831,14 +831,19 @@ function PetApp() {
 
   useEffect(() => {
     const mode = panel === "chat" ? "chat" : "pet";
-    void setDesktopWindowMode(mode, config.appearance.petSize, hasFloatingBubble);
-  }, [config.appearance.petSize, hasFloatingBubble, panel]);
+    void setDesktopWindowMode(mode, config.appearance.petSize);
+  }, [config.appearance.petSize, panel]);
 
   useEffect(() => {
     let disposeShortcut: () => void = () => undefined;
     let disposeTray: () => void = () => undefined;
+    let disposed = false;
 
     void listenTauriEvent<string>("workbuddy://shortcut", handleShortcut).then((dispose) => {
+      if (disposed) {
+        dispose();
+        return;
+      }
       disposeShortcut = dispose;
     });
     void listenTauriEvent<string>("workbuddy://tray", (payload) => {
@@ -851,10 +856,15 @@ function PetApp() {
       if (payload === "showChat") openChat();
       if (payload === "showSettings") openSettings();
     }).then((dispose) => {
+      if (disposed) {
+        dispose();
+        return;
+      }
       disposeTray = dispose;
     });
 
     return () => {
+      disposed = true;
       disposeShortcut();
       disposeTray();
     };

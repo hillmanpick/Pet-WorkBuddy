@@ -91,12 +91,12 @@ pnpm desktop
 
 #### 4. 如果端口被占用
 
-开发模式使用 `127.0.0.1:5175`。如果看到类似 `Port 5175 is already in use`，说明之前的 Vite 进程还在运行。
+开发模式使用 `127.0.0.1:5176`。如果看到类似 `Port 5176 is already in use`，说明之前的 Vite 进程还在运行。
 
 可以关闭旧终端，或者在 PowerShell 中查看并结束占用进程：
 
 ```powershell
-netstat -ano | findstr :5175
+netstat -ano | findstr :5176
 taskkill /PID <PID> /F
 ```
 
@@ -533,13 +533,13 @@ The first run can take a while because Rust dependencies are compiled.
 The frontend dev server uses:
 
 ```text
-127.0.0.1:5175
+127.0.0.1:5176
 ```
 
 If the port is occupied:
 
 ```powershell
-netstat -ano | findstr :5175
+netstat -ano | findstr :5176
 taskkill /PID <PID> /F
 ```
 

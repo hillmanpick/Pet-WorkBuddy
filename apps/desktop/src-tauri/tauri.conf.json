@@ -2,7 +2,7 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
-    "devPath": "http://127.0.0.1:5175",
+    "devPath": "http://127.0.0.1:5176",
     "distDir": "../dist"
   },
   "package": {
@@ -21,6 +21,11 @@
       "icon": [
         "icons/icon.ico"
       ],
+      "windows": {
+        "nsis": {
+          "installerIcon": "icons/icon.ico"
+        }
+      },
       "targets": "all"
     },
     "security": {
@@ -34,9 +39,9 @@
       {
         "title": "WorkBuddy",
         "width": 340,
-        "height": 360,
+        "height": 548,
         "minWidth": 280,
-        "minHeight": 260,
+        "minHeight": 500,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,

@@ -1,4 +1,7 @@
-use std::{env, process::Command};
+use std::{
+    env,
+    process::{Command, Stdio},
+};
 
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const VALUE_NAME: &str = "WorkBuddy";
@@ -32,6 +35,8 @@ fn enable_startup() -> Result<(), String> {
             &command,
             "/f",
         ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map_err(|error| error.to_string())?;
 
@@ -49,6 +54,8 @@ fn disable_startup() -> Result<(), String> {
 
     let status = Command::new("reg")
         .args(["delete", RUN_KEY, "/v", VALUE_NAME, "/f"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map_err(|error| error.to_string())?;
 
@@ -62,6 +69,8 @@ fn disable_startup() -> Result<(), String> {
 fn registry_value_exists() -> bool {
     Command::new("reg")
         .args(["query", RUN_KEY, "/v", VALUE_NAME])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)

@@ -9,8 +9,11 @@ export type PointerDragResult = { activated: boolean; edge: ScreenEdge | null };
 
 const FLOATING_BUBBLE_WINDOW_HEIGHT = 128;
 const FLOATING_BUBBLE_STAGE_OFFSET = 122;
+const PET_WINDOW_TOP = 12;
+const PET_STAGE_PADDING_TOP = 34;
 
 let previousDesktopWindowLayout: { mode: DesktopWindowMode; petSize: number; hasFloatingBubble: boolean } | null = null;
+let settingsWindowOpenPromise: Promise<void> | null = null;
 
 type TauriWindow = Window & {
   __TAURI__?: unknown;
@@ -30,21 +33,23 @@ export async function invokeCommand<T>(command: string, args?: Record<string, un
 }
 
 function windowSizeForMode(mode: DesktopWindowMode, petSize: number, hasFloatingBubble = false) {
-  const bubbleHeight = hasFloatingBubble ? FLOATING_BUBBLE_WINDOW_HEIGHT : 0;
-  if (mode === "chat") {
-    return {
-      width: Math.max(340, petSize + 138),
-      height: Math.max(410, petSize + 230 + bubbleHeight),
-    };
-  }
+  const bubbleHeight = FLOATING_BUBBLE_WINDOW_HEIGHT;
   return {
-    width: Math.max(320, petSize + 120),
-    height: Math.max(330, petSize + 138 + bubbleHeight),
+    width: Math.max(340, petSize + 138),
+    height: Math.max(410, petSize + 230 + bubbleHeight),
   };
 }
 
 function petStageOffsetForBubble(hasFloatingBubble: boolean) {
-  return hasFloatingBubble ? FLOATING_BUBBLE_STAGE_OFFSET : 0;
+  return FLOATING_BUBBLE_STAGE_OFFSET;
+}
+
+function petAnchorForLayout(mode: DesktopWindowMode, petSize: number, hasFloatingBubble: boolean) {
+  const size = windowSizeForMode(mode, petSize, hasFloatingBubble);
+  return {
+    x: size.width / 2,
+    y: PET_WINDOW_TOP + PET_STAGE_PADDING_TOP + petStageOffsetForBubble(hasFloatingBubble) + petSize / 2,
+  };
 }
 
 export function visibleStripForPet(petSize: number) {
@@ -76,37 +81,64 @@ export async function setDesktopWindowMode(
 
   const { width, height } = windowSizeForMode(mode, petSize, hasFloatingBubble);
   const { appWindow, currentMonitor, LogicalSize, PhysicalPosition } = await import("@tauri-apps/api/window");
-  const previousStageOffset = previousDesktopWindowLayout
-    ? petStageOffsetForBubble(previousDesktopWindowLayout.hasFloatingBubble)
-    : 0;
-  const nextStageOffset = petStageOffsetForBubble(hasFloatingBubble);
-  const positionDeltaY = previousStageOffset - nextStageOffset;
+  const monitor = await currentMonitor();
+  const scaleFactor = monitor?.scaleFactor || window.devicePixelRatio || 1;
+  const position = await appWindow.outerPosition();
+  const previousAnchor = previousDesktopWindowLayout
+    ? petAnchorForLayout(
+        previousDesktopWindowLayout.mode,
+        previousDesktopWindowLayout.petSize,
+        previousDesktopWindowLayout.hasFloatingBubble,
+      )
+    : null;
+  const nextAnchor = petAnchorForLayout(mode, petSize, hasFloatingBubble);
+  const nextPosition = previousAnchor
+    ? {
+        x: Math.round(position.x + (previousAnchor.x - nextAnchor.x) * scaleFactor),
+        y: Math.round(position.y + (previousAnchor.y - nextAnchor.y) * scaleFactor),
+      }
+    : null;
 
-  await appWindow.setSize(new LogicalSize(width, height));
+  const shouldMoveWindow = Boolean(
+    nextPosition && (nextPosition.x !== position.x || nextPosition.y !== position.y),
+  );
+  const previousSize = previousDesktopWindowLayout
+    ? windowSizeForMode(
+        previousDesktopWindowLayout.mode,
+        previousDesktopWindowLayout.petSize,
+        previousDesktopWindowLayout.hasFloatingBubble,
+      )
+    : null;
 
-  if (positionDeltaY) {
-    const position = await appWindow.outerPosition();
-    await appWindow.setPosition(new PhysicalPosition(position.x, Math.round(position.y + positionDeltaY)));
+  if (previousSize?.width === width && previousSize.height === height && !shouldMoveWindow) {
+    previousDesktopWindowLayout = { mode, petSize, hasFloatingBubble };
+    return;
   }
+
+  await Promise.all([
+    appWindow.setSize(new LogicalSize(width, height)),
+    shouldMoveWindow && nextPosition
+      ? appWindow.setPosition(new PhysicalPosition(nextPosition.x, nextPosition.y))
+      : Promise.resolve(),
+  ]);
 
   previousDesktopWindowLayout = { mode, petSize, hasFloatingBubble };
 
   if (mode !== "chat") return;
 
-  const monitor = await currentMonitor();
   if (!monitor) return;
 
-  const position = await appWindow.outerPosition();
+  const currentPosition = await appWindow.outerPosition();
   const size = await appWindow.outerSize();
   const margin = Math.round(8 * (monitor.scaleFactor || 1));
   const minX = monitor.position.x + margin;
   const minY = monitor.position.y + margin;
   const maxX = monitor.position.x + monitor.size.width - size.width - margin;
   const maxY = monitor.position.y + monitor.size.height - size.height - margin;
-  const x = Math.min(Math.max(position.x, minX), Math.max(minX, maxX));
-  const y = Math.min(Math.max(position.y, minY), Math.max(minY, maxY));
+  const x = Math.min(Math.max(currentPosition.x, minX), Math.max(minX, maxX));
+  const y = Math.min(Math.max(currentPosition.y, minY), Math.max(minY, maxY));
 
-  if (x !== position.x || y !== position.y) {
+  if (x !== currentPosition.x || y !== currentPosition.y) {
     await appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
   }
 }
@@ -114,31 +146,54 @@ export async function setDesktopWindowMode(
 export async function openSettingsWindow(): Promise<void> {
   if (!isTauriRuntime()) return;
 
-  const { WebviewWindow, getAll } = await import("@tauri-apps/api/window");
-  const existing = getAll().find((item) => item.label === "settings");
-  if (existing) {
-    await existing.show();
-    await existing.setFocus();
-    return;
+  if (settingsWindowOpenPromise) {
+    return settingsWindowOpenPromise;
   }
 
-  const url = new URL(window.location.href);
-  url.searchParams.set("view", "settings");
+  settingsWindowOpenPromise = (async () => {
+    const { WebviewWindow, getAll } = await import("@tauri-apps/api/window");
+    const existing = getAll().find((item) => item.label === "settings");
+    if (existing) {
+      await existing.show();
+      await existing.setFocus();
+      return;
+    }
 
-  new WebviewWindow("settings", {
-    url: url.href,
-    title: "WorkBuddy Settings",
-    width: 760,
-    height: 680,
-    minWidth: 640,
-    minHeight: 520,
-    center: true,
-    decorations: true,
-    alwaysOnTop: false,
-    resizable: true,
-    skipTaskbar: false,
-    transparent: false,
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "settings");
+
+    const settingsWindow = new WebviewWindow("settings", {
+      url: url.href,
+      title: "WorkBuddy Settings",
+      width: 760,
+      height: 680,
+      minWidth: 640,
+      minHeight: 520,
+      center: true,
+      decorations: true,
+      alwaysOnTop: false,
+      resizable: true,
+      skipTaskbar: false,
+      transparent: false,
+    });
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+
+      void settingsWindow.once("tauri://created", finish);
+      void settingsWindow.once("tauri://error", finish);
+      window.setTimeout(finish, 1200);
+    });
+  })().finally(() => {
+    settingsWindowOpenPromise = null;
   });
+
+  return settingsWindowOpenPromise;
 }
 
 export async function closeCurrentWindow(): Promise<void> {
@@ -156,7 +211,7 @@ function petVisualBounds(
   const pet = petSize * scaleFactor;
   const petShell = (petSize + 92) * scaleFactor;
   const sideInset = Math.max(0, (windowSize.width - petShell) / 2) + 46 * scaleFactor;
-  const topInset = 46 * scaleFactor;
+  const topInset = (PET_WINDOW_TOP + PET_STAGE_PADDING_TOP + FLOATING_BUBBLE_STAGE_OFFSET) * scaleFactor;
 
   return {
     left: sideInset,
