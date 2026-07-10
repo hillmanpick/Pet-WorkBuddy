@@ -14,30 +14,69 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ComputerAction {
-    OpenApp { app: String },
-    OpenFile { path: String },
-    OpenFolder { folder: String },
-    OrganizeFolder { folder: String },
-    CreateWordDocument { app: String, text: String },
-    OpenUrl { url: String },
-    SetClipboard { text: String },
+    OpenApp {
+        app: String,
+    },
+    OpenFile {
+        path: String,
+    },
+    OpenFolder {
+        folder: String,
+    },
+    OrganizeFolder {
+        folder: String,
+    },
+    CreateWordDocument {
+        app: String,
+        text: String,
+    },
+    OpenUrl {
+        url: String,
+    },
+    SetClipboard {
+        text: String,
+    },
     ClipboardReadText,
-    PasteText { text: String },
-    ShellCommand { command: String },
+    PasteText {
+        text: String,
+    },
+    ShellCommand {
+        command: String,
+    },
     TerminalCommand {
         shell: String,
         command: String,
         cwd: Option<String>,
         timeout_ms: Option<u64>,
     },
-    FsList { root: String },
-    FsSearch { root: String, query: String },
-    FsRead { path: String },
-    FsWrite { path: String, text: String },
-    FsCopy { from: String, to: String },
-    FsMove { from: String, to: String },
-    FsDeleteToRecycleBin { path: String },
-    BrowserScreenshot { url: String },
+    FsList {
+        root: String,
+    },
+    FsSearch {
+        root: String,
+        query: String,
+    },
+    FsRead {
+        path: String,
+    },
+    FsWrite {
+        path: String,
+        text: String,
+    },
+    FsCopy {
+        from: String,
+        to: String,
+    },
+    FsMove {
+        from: String,
+        to: String,
+    },
+    FsDeleteToRecycleBin {
+        path: String,
+    },
+    BrowserScreenshot {
+        url: String,
+    },
     ScreenScreenshot,
     ScreenOcr,
     ScreenClick {
@@ -45,9 +84,15 @@ pub enum ComputerAction {
         y: i32,
         button: Option<String>,
     },
-    Hotkey { keys: Vec<String> },
-    Key { key: String },
-    Wait { ms: u64 },
+    Hotkey {
+        keys: Vec<String>,
+    },
+    Key {
+        key: String,
+    },
+    Wait {
+        ms: u64,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -104,7 +149,12 @@ fn run_action(action: ComputerAction) -> Result<String, String> {
             command,
             cwd,
             timeout_ms,
-        } => run_terminal_command(&shell, &command, cwd.as_deref(), timeout_ms.unwrap_or(30_000)),
+        } => run_terminal_command(
+            &shell,
+            &command,
+            cwd.as_deref(),
+            timeout_ms.unwrap_or(30_000),
+        ),
         ComputerAction::FsList { root } => fs_list(&root),
         ComputerAction::FsSearch { root, query } => fs_search(&root, &query),
         ComputerAction::FsRead { path } => fs_read(&path),
@@ -114,7 +164,10 @@ fn run_action(action: ComputerAction) -> Result<String, String> {
         ComputerAction::FsDeleteToRecycleBin { path } => fs_delete_to_recycle_bin(&path),
         ComputerAction::BrowserScreenshot { url } => browser_screenshot(&url),
         ComputerAction::ScreenScreenshot => screen_screenshot(),
-        ComputerAction::ScreenOcr => Err("OCR is not installed yet. Add an OCR plugin or MCP server to enable screen.ocr.".to_string()),
+        ComputerAction::ScreenOcr => Err(
+            "OCR is not installed yet. Add an OCR plugin or MCP server to enable screen.ocr."
+                .to_string(),
+        ),
         ComputerAction::ScreenClick { x, y, button } => click_screen(x, y, button.as_deref()),
         ComputerAction::Hotkey { keys } => press_hotkey(&keys),
         ComputerAction::Key { key } => press_key(&key),
@@ -137,7 +190,9 @@ fn open_app(app: &str) -> Result<String, String> {
         "calculator" => spawn_program("calc.exe"),
         "paint" => spawn_program("mspaint.exe"),
         "settings" => open_system_uri("ms-settings:"),
-        "screenshot" => open_system_uri("ms-screenclip:").or_else(|_| spawn_program("SnippingTool.exe")),
+        "screenshot" => {
+            open_system_uri("ms-screenclip:").or_else(|_| spawn_program("SnippingTool.exe"))
+        }
         value => Err(format!("Unsupported app '{}'.", value)),
     }
 }
@@ -157,9 +212,18 @@ fn open_url(url: &str) -> Result<String, String> {
         return Err("Only http:// and https:// URLs are allowed.".to_string());
     }
 
-    let script = format!("Start-Process -FilePath {}", powershell_single_quoted(trimmed));
+    let script = format!(
+        "Start-Process -FilePath {}",
+        powershell_single_quoted(trimmed)
+    );
     if let Ok(output) = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &script,
+        ])
         .output()
     {
         if output.status.success() {
@@ -382,7 +446,8 @@ fn path_from_input(value: &str) -> Result<PathBuf, String> {
     }
 
     let expanded = if let Some(rest) = trimmed.strip_prefix("~/") {
-        let home = env::var("USERPROFILE").map_err(|_| "USERPROFILE is unavailable.".to_string())?;
+        let home =
+            env::var("USERPROFILE").map_err(|_| "USERPROFILE is unavailable.".to_string())?;
         PathBuf::from(home).join(rest)
     } else {
         PathBuf::from(trimmed)
@@ -398,7 +463,10 @@ fn fs_list(root: &str) -> Result<String, String> {
     }
 
     let mut items = Vec::new();
-    for entry in std::fs::read_dir(&root).map_err(|error| error.to_string())?.take(200) {
+    for entry in std::fs::read_dir(&root)
+        .map_err(|error| error.to_string())?
+        .take(200)
+    {
         let entry = entry.map_err(|error| error.to_string())?;
         let path = entry.path();
         let kind = if path.is_dir() { "dir" } else { "file" };
@@ -523,7 +591,13 @@ fn fs_delete_to_recycle_bin(path: &str) -> Result<String, String> {
     };
 
     let output = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &script,
+        ])
         .output()
         .map_err(|error| error.to_string())?;
 
@@ -579,7 +653,8 @@ fn open_wps_writer() -> Result<String, String> {
         return Ok(message);
     }
 
-    open_start_menu_shortcut(&["wps", "金山"]).map_err(|error| format!("Could not open WPS: {}", error))
+    open_start_menu_shortcut(&["wps", "金山"])
+        .map_err(|error| format!("Could not open WPS: {}", error))
 }
 
 fn wps_candidates() -> Vec<PathBuf> {
@@ -676,7 +751,10 @@ fn find_shortcut(root: &Path, keywords: &[&str], max_depth: usize) -> Option<Pat
                 .and_then(|value| value.to_str())
                 .unwrap_or("")
                 .to_lowercase();
-            if keywords.iter().any(|keyword| name.contains(&keyword.to_lowercase())) {
+            if keywords
+                .iter()
+                .any(|keyword| name.contains(&keyword.to_lowercase()))
+            {
                 return Some(entry_path);
             }
         }
@@ -805,7 +883,13 @@ $bitmap.Dispose()
     );
 
     let output = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &script,
+        ])
         .output()
         .map_err(|error| error.to_string())?;
 
@@ -826,7 +910,13 @@ fn run_shell_command(command: &str) -> Result<String, String> {
     }
 
     let output = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", trimmed])
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            trimmed,
+        ])
         .output()
         .map_err(|error| error.to_string())?;
 
@@ -870,7 +960,13 @@ fn run_terminal_command(
     let mut cmd = match shell.trim().to_ascii_lowercase().as_str() {
         "powershell" => {
             let mut cmd = Command::new("powershell");
-            cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", trimmed]);
+            cmd.args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                trimmed,
+            ]);
             cmd
         }
         "cmd" => {
@@ -913,10 +1009,20 @@ fn run_terminal_command(
 
     let started = SystemTime::now();
     loop {
-        if child.try_wait().map_err(|error| error.to_string())?.is_some() {
-            let output = child.wait_with_output().map_err(|error| error.to_string())?;
+        if child
+            .try_wait()
+            .map_err(|error| error.to_string())?
+            .is_some()
+        {
+            let output = child
+                .wait_with_output()
+                .map_err(|error| error.to_string())?;
             let message = command_output_message(&output.stdout, &output.stderr);
-            return if output.status.success() { Ok(message) } else { Err(message) };
+            return if output.status.success() {
+                Ok(message)
+            } else {
+                Err(message)
+            };
         }
 
         if started.elapsed().map_err(|error| error.to_string())? > timeout {
@@ -981,7 +1087,12 @@ fn click_screen(x: i32, y: i32, button: Option<&str>) -> Result<String, String> 
     enigo
         .button(mouse_button, Direction::Click)
         .map_err(|error| error.to_string())?;
-    Ok(format!("clicked {} at {},{}", button.unwrap_or("left"), x, y))
+    Ok(format!(
+        "clicked {} at {},{}",
+        button.unwrap_or("left"),
+        x,
+        y
+    ))
 }
 
 fn press_hotkey(keys: &[String]) -> Result<String, String> {

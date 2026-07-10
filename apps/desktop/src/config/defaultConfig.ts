@@ -10,6 +10,7 @@ export const defaultConfig: WorkBuddyConfig = {
       baseUrl: "https://api.openai.com/v1",
       apiKeyRef: "workbuddy.openai.api_key",
       modelId: "gpt-5.5",
+      imageInputMode: "auto",
       temperature: 0.7,
       maxTokens: 2048,
       systemPrompt:
@@ -21,6 +22,7 @@ export const defaultConfig: WorkBuddyConfig = {
       baseUrl: "https://api.anthropic.com",
       apiKeyRef: "workbuddy.claude.api_key",
       modelId: "claude-4.7",
+      imageInputMode: "auto",
       temperature: 0.7,
       maxTokens: 2048,
       systemPrompt:
@@ -32,6 +34,7 @@ export const defaultConfig: WorkBuddyConfig = {
       baseUrl: "https://api.deepseek.com/v1",
       apiKeyRef: "workbuddy.deepseek.api_key",
       modelId: "deepseek-v4-pro",
+      imageInputMode: "auto",
       temperature: 0.7,
       maxTokens: 2048,
       systemPrompt:

@@ -32,6 +32,13 @@ export async function invokeCommand<T>(command: string, args?: Record<string, un
   return invoke<T>(command, args);
 }
 
+export function writeAppLog(message: string, details?: Record<string, unknown>): void {
+  if (!isTauriRuntime()) return;
+
+  const line = details ? `${message} ${JSON.stringify(details)}` : message;
+  void invokeCommand("append_app_log", { message: line }).catch(() => undefined);
+}
+
 function windowSizeForMode(mode: DesktopWindowMode, petSize: number, hasFloatingBubble = false) {
   const bubbleHeight = FLOATING_BUBBLE_WINDOW_HEIGHT;
   return {
@@ -230,15 +237,30 @@ function nearestPetEdge(
   return [
     { edge: "left" as const, value: Math.abs(position.x + bounds.left - area.x) },
     { edge: "right" as const, value: Math.abs(area.x + area.width - (position.x + bounds.right)) },
-    { edge: "top" as const, value: Math.abs(position.y + bounds.top - area.y) },
-    { edge: "bottom" as const, value: Math.abs(area.y + area.height - (position.y + bounds.bottom)) },
   ].sort((a, b) => a.value - b.value)[0];
+}
+
+function positionForPetEdge(
+  edge: ScreenEdge,
+  position: { x: number; y: number },
+  bounds: { left: number; right: number; top: number; bottom: number; size: number },
+  area: { x: number; y: number; width: number; height: number },
+  visibleSize: number,
+) {
+  let x = position.x;
+  let y = position.y;
+  if (edge === "left") x = area.x - bounds.left - bounds.size + visibleSize;
+  if (edge === "right") x = area.x + area.width + bounds.size - visibleSize - bounds.right;
+  if (edge === "top") y = area.y - bounds.top - bounds.size + visibleSize;
+  if (edge === "bottom") y = area.y + area.height + bounds.size - visibleSize - bounds.bottom;
+  return { x, y };
 }
 
 export async function snapWindowToScreenEdge(
   visible = 92,
   petSize = 190,
   force = false,
+  preferredEdge?: ScreenEdge,
 ): Promise<ScreenEdge | null> {
   if (!isTauriRuntime()) return null;
 
@@ -261,16 +283,12 @@ export async function snapWindowToScreenEdge(
   const snapTolerance = Math.max(42, petSize * 0.38 * scaleFactor);
   if (!force && tucked.value > snapTolerance) return null;
   const visibleSize = visible * scaleFactor;
+  const edge = force && preferredEdge ? preferredEdge : tucked.edge;
+  const { x, y } = positionForPetEdge(edge, position, bounds, area, visibleSize);
 
-  let x = position.x;
-  let y = position.y;
-  if (tucked.edge === "left") x = area.x - bounds.left - bounds.size + visibleSize;
-  if (tucked.edge === "right") x = area.x + area.width + bounds.size - visibleSize - bounds.right;
-  if (tucked.edge === "top") y = area.y - bounds.top - bounds.size + visibleSize;
-  if (tucked.edge === "bottom") y = area.y + area.height + bounds.size - visibleSize - bounds.bottom;
-
+  writeAppLog("snapWindowToScreenEdge", { edge, force, preferredEdge, x, y, position });
   await appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
-  return tucked.edge;
+  return edge;
 }
 
 export async function peekWindowFromScreenEdge(petSize = 190): Promise<ScreenEdge | null> {
@@ -303,18 +321,11 @@ export async function peekWindowFromScreenEdge(petSize = 190): Promise<ScreenEdg
     edge = "right";
     x = area.x + area.width + bounds.size - visibleSize - bounds.right;
   }
-  if (position.y + bounds.top < area.y) {
-    edge = "top";
-    y = area.y - bounds.top - bounds.size + visibleSize;
-  }
-  if (position.y + bounds.bottom > area.y + area.height) {
-    edge = "bottom";
-    y = area.y + area.height + bounds.size - visibleSize - bounds.bottom;
-  }
 
   if (!edge) return null;
 
   if (x !== position.x || y !== position.y) {
+    writeAppLog("peekWindowFromScreenEdge", { edge, x, y, position });
     await appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
   }
   return edge;
@@ -406,6 +417,7 @@ export async function dragWindowWithPointer(
   petSize = 190,
   options: {
     activationDistance?: number;
+    startEdge?: ScreenEdge | null;
     onActivated?: () => void;
   } = {},
 ): Promise<PointerDragResult> {
@@ -416,10 +428,12 @@ export async function dragWindowWithPointer(
   if (!startPointer?.leftPressed) return { activated: false, edge: null };
 
   const activationDistance = options.activationDistance ?? 2;
+  writeAppLog("dragWindowWithPointer:start", { startPointer, startPosition, startEdge: options.startEdge });
   let activated = false;
   let lastX = startPosition.x;
   let lastY = startPosition.y;
   let moveInFlight = false;
+  let moveGeneration = 0;
   let queuedPosition: { x: number; y: number } | null = null;
 
   function flushMoveQueue() {
@@ -428,10 +442,21 @@ export async function dragWindowWithPointer(
     const next = queuedPosition;
     queuedPosition = null;
     moveInFlight = true;
+    const generation = ++moveGeneration;
+    const watchdog = window.setTimeout(() => {
+      if (moveInFlight && generation === moveGeneration) {
+        writeAppLog("dragWindowWithPointer:setPositionTimeout", next);
+        moveInFlight = false;
+        flushMoveQueue();
+      }
+    }, 350);
+
     void appWindow
       .setPosition(new PhysicalPosition(next.x, next.y))
       .catch(() => undefined)
       .finally(() => {
+        window.clearTimeout(watchdog);
+        if (generation !== moveGeneration) return;
         moveInFlight = false;
         flushMoveQueue();
       });
@@ -447,8 +472,14 @@ export async function dragWindowWithPointer(
 
   function waitForMoveQueue(): Promise<void> {
     return new Promise((resolve) => {
+      const startedAt = performance.now();
       const check = () => {
         if (!moveInFlight && !queuedPosition) {
+          resolve();
+          return;
+        }
+        if (performance.now() - startedAt > 800) {
+          writeAppLog("dragWindowWithPointer:moveQueueWaitTimeout", { moveInFlight, queuedPosition });
           resolve();
           return;
         }
@@ -461,15 +492,23 @@ export async function dragWindowWithPointer(
 
   await new Promise<void>((resolve) => {
     let settled = false;
+    const dragStartedAt = performance.now();
 
     const tick = () => {
       if (settled) return;
+      if (performance.now() - dragStartedAt > 30_000) {
+        writeAppLog("dragWindowWithPointer:dragTimeout", { activated, lastX, lastY });
+        settled = true;
+        resolve();
+        return;
+      }
 
       void getPointerState()
         .then(async (pointer) => {
           if (!pointer?.leftPressed) {
             settled = true;
             await waitForMoveQueue();
+            writeAppLog("dragWindowWithPointer:pointerReleased", { activated, lastX, lastY });
             resolve();
             return;
           }
@@ -478,6 +517,7 @@ export async function dragWindowWithPointer(
           const dy = pointer.y - startPointer.y;
           if (!activated && Math.hypot(dx, dy) >= activationDistance) {
             activated = true;
+            writeAppLog("dragWindowWithPointer:activated", { dx, dy, startEdge: options.startEdge });
             options.onActivated?.();
           }
 
@@ -487,7 +527,7 @@ export async function dragWindowWithPointer(
             queueMove(x, y);
           }
 
-          window.setTimeout(tick, 7);
+          window.setTimeout(tick, 16);
         })
         .catch(() => {
           settled = true;
@@ -501,6 +541,7 @@ export async function dragWindowWithPointer(
   if (!activated) return { activated, edge: null };
 
   const edge = await snapWindowToScreenEdge(visibleStripForPet(petSize), petSize);
+  writeAppLog("dragWindowWithPointer:end", { edge });
   return { activated, edge };
 }
 
@@ -517,6 +558,8 @@ export async function walkAppWindowRandomly(
   const start = await appWindow.outerPosition();
   const size = await appWindow.outerSize();
   const margin = 24;
+  if (isWindowOutsideMonitor(start, size, monitor, margin)) return null;
+
   const minX = monitor.position.x + margin;
   const maxX = monitor.position.x + monitor.size.width - size.width - margin;
   const minY = monitor.position.y + margin;
@@ -542,7 +585,7 @@ export async function walkAppWindowRandomly(
       const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
       const x = Math.round(start.x + (target.x - start.x) * eased);
       const y = Math.round(start.y + (target.y - start.y) * eased);
-      void appWindow.setPosition(new PhysicalPosition(x, y));
+      void appWindow.setPosition(new PhysicalPosition(x, y)).catch(() => undefined);
 
       if (progress < 1) {
         window.setTimeout(tick, 30);
@@ -555,6 +598,24 @@ export async function walkAppWindowRandomly(
   });
 
   return movement;
+}
+
+function isWindowOutsideMonitor(
+  position: { x: number; y: number },
+  size: { width: number; height: number },
+  monitor: { position: { x: number; y: number }; size: { width: number; height: number } },
+  tolerance = 0,
+) {
+  const left = monitor.position.x - tolerance;
+  const top = monitor.position.y - tolerance;
+  const right = monitor.position.x + monitor.size.width + tolerance;
+  const bottom = monitor.position.y + monitor.size.height + tolerance;
+  return (
+    position.x < left ||
+    position.y < top ||
+    position.x + size.width > right ||
+    position.y + size.height > bottom
+  );
 }
 
 export async function getLaunchOnStartup(): Promise<boolean> {

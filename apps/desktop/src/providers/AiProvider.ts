@@ -30,13 +30,21 @@ export function assertApiKey(apiKey: string, providerName: string): void {
   }
 }
 
-export function attachmentPromptText(attachments: ChatAttachment[] | undefined): string {
+export type AttachmentPromptOptions = {
+  sentImageIds?: ReadonlySet<string>;
+  visionSupported?: boolean;
+};
+
+export function attachmentPromptText(
+  attachments: ChatAttachment[] | undefined,
+  options: AttachmentPromptOptions = {},
+): string {
   if (!attachments?.length) return "";
 
   const parts = attachments.map((attachment, index) => {
     const header = `Attachment ${index + 1}: ${attachment.name} (${attachment.mimeType || "unknown"}, ${attachment.size} bytes)`;
     if (attachment.kind === "image") {
-      return `${header}\nImage attached for visual analysis.`;
+      return `${header}\n${imageAttachmentNote(attachment, options)}`;
     }
     if (attachment.kind === "text") {
       const truncated = attachment.truncated ? "\n[Content truncated]" : "";
@@ -48,8 +56,8 @@ export function attachmentPromptText(attachments: ChatAttachment[] | undefined):
   return `\n\nAttached files:\n${parts.join("\n\n")}`;
 }
 
-export function textWithAttachments(message: ChatMessage): string {
-  return `${message.content}${attachmentPromptText(message.attachments)}`.trim();
+export function textWithAttachments(message: ChatMessage, options: AttachmentPromptOptions = {}): string {
+  return `${message.content}${attachmentPromptText(message.attachments, options)}`.trim();
 }
 
 export function toProviderMessages(messages: ChatMessage[]) {
@@ -57,6 +65,21 @@ export function toProviderMessages(messages: ChatMessage[]) {
     .filter((message) => message.role !== "system")
     .map((message) => ({
       role: message.role,
-      content: textWithAttachments(message),
+      content: textWithAttachments(message, { sentImageIds: new Set(), visionSupported: false }),
     }));
+}
+
+function imageAttachmentNote(attachment: ChatAttachment, options: AttachmentPromptOptions): string {
+  if (options.sentImageIds?.has(attachment.id)) {
+    return "Image attached for visual analysis.";
+  }
+
+  if (options.sentImageIds) {
+    if (options.visionSupported) {
+      return "Image was not uploaded because this image type or data cannot be sent by the active provider.";
+    }
+    return "Image was not uploaded because the active provider/model is text-only.";
+  }
+
+  return "Image attached for visual analysis.";
 }

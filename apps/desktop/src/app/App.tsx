@@ -45,6 +45,7 @@ import {
   showAppWindow,
   type ScreenEdge,
   walkAppWindowRandomly,
+  writeAppLog,
 } from "../tauri/tauriClient";
 import {
   matchesShortcut,
@@ -63,6 +64,7 @@ import {
 type Panel = "none" | "chat" | "settings";
 const CONFIG_CHANNEL = "workbuddy.config";
 const PET_IDLE_WALK_MS = 5 * 60 * 1000;
+const CHAT_AUTO_CLOSE_MS = 30 * 1000;
 const AGENT_MAX_ITERATIONS = 3;
 const CHAT_COLOR_THEMES: Record<
   string,
@@ -208,6 +210,8 @@ function PetApp() {
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const [tuckedEdge, setTuckedEdge] = useState<ScreenEdge | null>(null);
   const [toolbarActivityToken, setToolbarActivityToken] = useState(0);
+  const [chatActivityToken, setChatActivityToken] = useState(0);
+  const [petDragging, setPetDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [computerTask, setComputerTask] = useState<{
     plan: ComputerTaskPlan;
@@ -232,6 +236,11 @@ function PetApp() {
   const markToolbarActivity = useCallback(() => {
     lastPetInteractionAtRef.current = Date.now();
     setToolbarActivityToken((value) => value + 1);
+  }, []);
+
+  const markChatActivity = useCallback(() => {
+    lastPetInteractionAtRef.current = Date.now();
+    setChatActivityToken((value) => value + 1);
   }, []);
 
   const updateConfig = useCallback((next: WorkBuddyConfig) => {
@@ -341,7 +350,16 @@ function PetApp() {
   }, [labels.pet.clickPhrases, labels.pet.clicked, petPack, playPetAction, scheduleIdleAction, showBubble]);
 
   const startIdleWalk = useCallback(async () => {
-    if (idleWalkRunningRef.current || busy || panel !== "none") return;
+    if (
+      idleWalkRunningRef.current ||
+      busy ||
+      panel !== "none" ||
+      tuckedEdge ||
+      hiddenByUserRef.current ||
+      hiddenByDoNotDisturbRef.current
+    ) {
+      return;
+    }
     idleWalkRunningRef.current = true;
     lastPetInteractionAtRef.current = Date.now();
 
@@ -360,15 +378,16 @@ function PetApp() {
       idleWalkRunningRef.current = false;
       scheduleIdleAction(700);
     }
-  }, [busy, labels.pet.idlePhrases, panel, petPack, playPetAction, scheduleIdleAction, showBubble]);
+  }, [busy, labels.pet.idlePhrases, panel, petPack, playPetAction, scheduleIdleAction, showBubble, tuckedEdge]);
 
   const openChat = useCallback(() => {
     hiddenByUserRef.current = false;
     void showAppWindow();
     setPanel("chat");
+    markChatActivity();
     setFocusToken((value) => value + 1);
     triggerPet("onChatOpen", labels.pet.listening);
-  }, [labels.pet.listening, triggerPet]);
+  }, [labels.pet.listening, markChatActivity, triggerPet]);
 
   const toggleChat = useCallback(() => {
     if (panel === "chat") {
@@ -600,6 +619,7 @@ function PetApp() {
   const handleSend = useCallback(
     async (draft: ChatDraft | string) => {
       if (busy) return;
+      markChatActivity();
 
       const text = typeof draft === "string" ? draft : draft.content;
       const attachments = typeof draft === "string" ? [] : draft.attachments;
@@ -648,6 +668,7 @@ function PetApp() {
         setMessages(finalMessages);
         saveChatHistory(finalMessages);
         setPanel("chat");
+        markChatActivity();
         setFocusToken((value) => value + 1);
         setComputerTask({ plan: taskPlan, phase: "prepare" });
 
@@ -710,6 +731,7 @@ function PetApp() {
       labels.pet.apiKeyNeeded,
       labels.pet.done,
       labels.pet.thinking,
+      markChatActivity,
       messages,
       runComputerTask,
       triggerPet,
@@ -740,8 +762,11 @@ function PetApp() {
   const handleShortcut = useCallback(
     (action: ShortcutAction | string) => {
       if (action === "toggleChat") {
-        setPanel((value) => (value === "chat" ? "none" : "chat"));
-        setFocusToken((value) => value + 1);
+        if (panel === "chat") {
+          setPanel("none");
+        } else {
+          openChat();
+        }
         return;
       }
       if (action === "hidePet") {
@@ -764,7 +789,7 @@ function PetApp() {
         if (command) runQuickCommand(command);
       }
     },
-    [config.quickCommands, hidePet, labels.pet.back, openChat, runQuickCommand, triggerPet],
+    [config.quickCommands, hidePet, labels.pet.back, openChat, panel, runQuickCommand, triggerPet],
   );
 
   useEffect(() => {
@@ -814,21 +839,21 @@ function PetApp() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (!busy && panel === "none" && !idleWalkRunningRef.current) {
+      if (!busy && panel === "none" && !tuckedEdge && !idleWalkRunningRef.current) {
         playPetAction(randomIdleAction(petPack));
       }
     }, 9000);
     return () => window.clearInterval(timer);
-  }, [busy, panel, petPack, playPetAction]);
+  }, [busy, panel, petPack, playPetAction, tuckedEdge]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (Date.now() - lastPetInteractionAtRef.current >= PET_IDLE_WALK_MS) {
+      if (!tuckedEdge && Date.now() - lastPetInteractionAtRef.current >= PET_IDLE_WALK_MS) {
         void startIdleWalk();
       }
     }, 30000);
     return () => window.clearInterval(timer);
-  }, [startIdleWalk]);
+  }, [startIdleWalk, tuckedEdge]);
 
   useEffect(() => {
     if (toolbarHidden) return undefined;
@@ -839,6 +864,16 @@ function PetApp() {
 
     return () => window.clearTimeout(timer);
   }, [toolbarActivityToken, toolbarHidden]);
+
+  useEffect(() => {
+    if (panel !== "chat" || busy) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setPanel("none");
+    }, CHAT_AUTO_CLOSE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [busy, chatActivityToken, panel]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -893,6 +928,14 @@ function PetApp() {
       if (disposed || hiddenByDoNotDisturbRef.current) return;
 
       try {
+        if (petDragging) {
+          if (mousePassthroughRef.current) {
+            mousePassthroughRef.current = false;
+            await setWindowMousePassthrough(false);
+          }
+          return;
+        }
+
         const [pointer, frame] = await Promise.all([getGlobalCursorPosition(), getWindowFrame()]);
         if (!pointer || !frame) return;
 
@@ -924,7 +967,7 @@ function PetApp() {
       mousePassthroughRef.current = false;
       void setWindowMousePassthrough(false);
     };
-  }, [panel, toolbarHidden, tuckedEdge, bubble, computerTask, config.appearance.petSize]);
+  }, [panel, toolbarHidden, tuckedEdge, bubble, computerTask, config.appearance.petSize, petDragging]);
 
   useEffect(() => {
     if (!isTauriRuntime()) return undefined;
@@ -1092,6 +1135,8 @@ function PetApp() {
         onToggleToolbar={() => setToolbarHidden((value) => !value)}
         onToolbarActivity={markToolbarActivity}
         onTuckedEdgeChange={(edge) => {
+          lastPetInteractionAtRef.current = Date.now();
+          writeAppLog("App:tuckedEdgeChange", { edge });
           setTuckedEdge(edge);
           if (edge) {
             setPanel("none");
@@ -1099,10 +1144,14 @@ function PetApp() {
           }
         }}
         onDragStart={() => {
+          writeAppLog("App:dragStart", { tuckedEdge });
+          setPetDragging(true);
           markToolbarActivity();
           triggerPet("onDragStart");
         }}
         onDragEnd={() => {
+          writeAppLog("App:dragEnd", { tuckedEdge });
+          setPetDragging(false);
           markToolbarActivity();
           triggerPet("onDragEnd");
         }}
@@ -1113,6 +1162,7 @@ function PetApp() {
           busy={busy}
           focusToken={focusToken}
           labels={labels.chat}
+          onActivity={markChatActivity}
           onSend={handleSend}
         />
       ) : null}

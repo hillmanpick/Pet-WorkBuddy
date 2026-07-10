@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app_log;
 mod commands;
 mod computer_control;
 mod custom_pets;
@@ -10,8 +11,10 @@ mod tray;
 mod window;
 
 fn main() {
+    app_log::init();
     let instance_guard = single_instance::acquire();
     if !instance_guard.is_primary() {
+        app_log::write_line("Second instance detected; notifying primary instance");
         single_instance::notify_existing_instance();
         return;
     }
@@ -20,11 +23,14 @@ fn main() {
         .system_tray(tray::build_tray())
         .on_system_tray_event(tray::handle_tray_event)
         .setup(|app| {
+            app_log::write_line("Tauri setup started");
             single_instance::listen_for_second_instance(app.handle());
             shortcuts::register_default_shortcuts(app.handle());
+            app_log::write_line("Tauri setup completed");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            app_log::append_app_log,
             commands::get_api_key,
             commands::set_api_key,
             commands::delete_api_key,

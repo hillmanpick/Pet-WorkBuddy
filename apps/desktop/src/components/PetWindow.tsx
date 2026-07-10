@@ -9,7 +9,9 @@ import {
   dragWindowWithPointer,
   peekWindowFromScreenEdge,
   snapWindowToScreenEdge,
+  setWindowMousePassthrough,
   visibleStripForPet,
+  writeAppLog,
   type ScreenEdge,
 } from "../tauri/tauriClient";
 
@@ -115,23 +117,31 @@ export function PetWindow({
     if (dragInFlightRef.current) return;
     dragInFlightRef.current = true;
     dragStartedRef.current = false;
+    const startEdge = tuckedEdge;
+
+    writeAppLog("PetWindow:trackDrag:start", { tuckedEdge: startEdge });
+    await setWindowMousePassthrough(false).catch(() => undefined);
 
     const result = await dragWindowWithPointer(petSize, {
       activationDistance: 2,
+      startEdge,
       onActivated: () => {
         if (dragStartedRef.current) return;
         dragStartedRef.current = true;
+        writeAppLog("PetWindow:trackDrag:activated", { startEdge });
         updateTuckedEdge(null);
         onDragStart();
       },
     }).catch(() => ({ activated: false, edge: null }));
 
+    writeAppLog("PetWindow:trackDrag:result", result);
     if (result.activated) {
       updateTuckedEdge(result.edge);
       onDragEnd();
     } else {
-      if (tuckedEdge) {
-        updateTuckedEdge(null);
+      if (startEdge) {
+        const edge = await peekWindowFromScreenEdge(petSize).catch(() => startEdge);
+        updateTuckedEdge(edge ?? startEdge);
       }
       onClickPet();
     }
@@ -183,6 +193,7 @@ export function PetWindow({
   }
 
   async function handleMouseEnter() {
+    if (dragInFlightRef.current) return;
     const edge = await peekWindowFromScreenEdge(petSize);
     if (edge && edge !== tuckedEdge) {
       updateTuckedEdge(edge);
@@ -190,8 +201,8 @@ export function PetWindow({
   }
 
   async function handleMouseLeave() {
-    if (!tuckedEdge) return;
-    const edge = await snapWindowToScreenEdge(visibleStripForPet(petSize), petSize, true);
+    if (dragInFlightRef.current || !tuckedEdge) return;
+    const edge = await snapWindowToScreenEdge(visibleStripForPet(petSize), petSize, true, tuckedEdge);
     updateTuckedEdge(edge ?? tuckedEdge);
   }
 
@@ -218,7 +229,7 @@ export function PetWindow({
         <button
           className="pet-stage"
           type="button"
-          title={labels.drag}
+          aria-label={labels.drag}
           onPointerDown={handlePointerDown}
           onPointerUp={releaseDragPointer}
           onPointerCancel={releaseDragPointer}
@@ -235,7 +246,6 @@ export function PetWindow({
         <button
           className="pet-rotate-handle"
           type="button"
-          title={labels.rotate}
           aria-label={labels.rotate}
           onPointerDown={handleRotatePointerDown}
           onPointerMove={handleRotatePointerMove}
@@ -248,7 +258,7 @@ export function PetWindow({
         <button
           className="pet-toolbar-reveal"
           type="button"
-          title={labels.showToolbar}
+          aria-label={labels.showToolbar}
           onClick={() => {
             onToolbarActivity();
             onToggleToolbar();
@@ -260,7 +270,7 @@ export function PetWindow({
         <nav className="pet-toolbar">
           <button
             type="button"
-            title={labels.openChat}
+            aria-label={labels.openChat}
             onClick={() => {
               onToolbarActivity();
               onOpenChat();
@@ -270,7 +280,7 @@ export function PetWindow({
           </button>
           <button
             type="button"
-            title={labels.openSettings}
+            aria-label={labels.openSettings}
             onClick={() => {
               onToolbarActivity();
               onOpenSettings();
@@ -280,7 +290,7 @@ export function PetWindow({
           </button>
           <button
             type="button"
-            title={labels.hideToolbar}
+            aria-label={labels.hideToolbar}
             onClick={() => {
               onToolbarActivity();
               onToggleToolbar();
@@ -290,7 +300,7 @@ export function PetWindow({
           </button>
           <button
             type="button"
-            title={labels.hidePet}
+            aria-label={labels.hidePet}
             onClick={() => {
               onToolbarActivity();
               onHide();
@@ -327,7 +337,7 @@ function ComputerTaskBubble({ task, busy, labels, onConfirm, onCancel }: Compute
           <ShieldCheck size={14} />
           <strong>{title}</strong>
         </span>
-        <button type="button" title={labels.cancel} disabled={busy} onClick={onCancel}>
+        <button type="button" aria-label={labels.cancel} disabled={busy} onClick={onCancel}>
           <X size={14} />
         </button>
       </header>

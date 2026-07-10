@@ -25,15 +25,7 @@ fn enable_startup() -> Result<(), String> {
     let command = format!("\"{}\"", exe.display());
     let status = Command::new("reg")
         .args([
-            "add",
-            RUN_KEY,
-            "/v",
-            VALUE_NAME,
-            "/t",
-            "REG_SZ",
-            "/d",
-            &command,
-            "/f",
+            "add", RUN_KEY, "/v", VALUE_NAME, "/t", "REG_SZ", "/d", &command, "/f",
         ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())

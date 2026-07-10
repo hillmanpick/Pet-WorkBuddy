@@ -1,5 +1,6 @@
 export type ProviderId = "openai" | "claude" | "deepseek";
 export type UiLanguage = "en" | "zh";
+export type ImageInputMode = "auto" | "enabled" | "disabled";
 
 export type ProviderConfig = {
   enabled: boolean;
@@ -7,6 +8,7 @@ export type ProviderConfig = {
   baseUrl: string;
   apiKeyRef: string;
   modelId: string;
+  imageInputMode: ImageInputMode;
   temperature: number;
   maxTokens: number;
   systemPrompt: string;
@@ -73,6 +75,8 @@ export type WorkBuddyConfig = {
 export type PetAnimationConfig = {
   clip?: string;
   file?: string;
+  frames?: string[];
+  fps?: number;
   loop?: boolean;
 };
 

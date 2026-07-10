@@ -17,7 +17,7 @@ export async function pickAndImportPetPack(): Promise<ImportedPetPack | null> {
     filters: [
       {
         name: "WorkBuddy Pet",
-        extensions: ["glb", "vrm", "gltf", "zip"],
+        extensions: ["glb", "vrm", "gltf", "gif", "png", "jpg", "jpeg", "webp", "zip"],
       },
     ],
   });

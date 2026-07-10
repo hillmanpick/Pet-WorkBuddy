@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AmbientLight,
   AnimationMixer,
@@ -28,6 +28,37 @@ type PetRendererProps = {
 };
 
 export function PetRenderer({
+  pack,
+  action,
+  actionToken,
+  rotationYaw,
+  autoRotate = false,
+  followPointer = true,
+}: PetRendererProps) {
+  if (pack?.type === "sprite") {
+    return (
+      <SpritePetRenderer
+        pack={pack}
+        action={action}
+        actionToken={actionToken}
+        rotationYaw={rotationYaw}
+      />
+    );
+  }
+
+  return (
+    <GltfPetRenderer
+      pack={pack}
+      action={action}
+      actionToken={actionToken}
+      rotationYaw={rotationYaw}
+      autoRotate={autoRotate}
+      followPointer={followPointer}
+    />
+  );
+}
+
+function GltfPetRenderer({
   pack,
   action,
   actionToken,
@@ -221,4 +252,58 @@ export function PetRenderer({
   }, [action, actionToken]);
 
   return <div className="pet-renderer" ref={containerRef} />;
+}
+
+function SpritePetRenderer({
+  pack,
+  action,
+  actionToken,
+  rotationYaw,
+}: Pick<PetRendererProps, "pack" | "action" | "actionToken" | "rotationYaw"> & {
+  pack: LoadedPetPack;
+}) {
+  const [frameIndex, setFrameIndex] = useState(0);
+  const animation = pack.animations[action] ?? pack.animations[pack.defaultAnimation];
+  const frameFiles = useMemo(() => {
+    const files = animation?.frames?.length
+      ? animation.frames
+      : [animation?.file ?? pack.model].filter(Boolean);
+    return files.map((file) => resolvePetAsset(pack, file));
+  }, [animation, pack]);
+  const fps = Math.max(1, Math.min(animation?.fps ?? 12, 30));
+  const shouldLoop = animation?.loop ?? true;
+
+  useEffect(() => {
+    setFrameIndex(0);
+  }, [action, actionToken, frameFiles.join("|")]);
+
+  useEffect(() => {
+    if (frameFiles.length <= 1) return undefined;
+
+    const timer = window.setInterval(() => {
+      setFrameIndex((current) => {
+        if (current + 1 < frameFiles.length) return current + 1;
+        return shouldLoop ? 0 : current;
+      });
+    }, 1000 / fps);
+
+    return () => window.clearInterval(timer);
+  }, [fps, frameFiles.length, shouldLoop]);
+
+  const src = frameFiles[Math.min(frameIndex, frameFiles.length - 1)];
+  const facing = rotationYaw < 0 ? -1 : 1;
+
+  return (
+    <div className="pet-renderer pet-sprite-renderer">
+      {src ? (
+        <img
+          key={`${action}-${actionToken}`}
+          src={src}
+          alt=""
+          draggable={false}
+          style={{ transform: `scaleX(${facing})` }}
+        />
+      ) : null}
+    </div>
+  );
 }

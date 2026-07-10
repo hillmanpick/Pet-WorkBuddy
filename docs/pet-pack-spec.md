@@ -40,7 +40,52 @@ my-pet/
 
 - `gltf`: `.glb` or `.gltf`
 - `vrm`: planned through the same loader boundary
-- `sprite`: planned for 2D sprite sheet packs
+- `sprite`: 2D `.gif` files, single `.png` images, or `.png` frame sequences
+
+## 2D Sprite Pack Example
+
+```text
+my-2d-pet/
+  pet.json
+  preview.png
+  idle/
+    idle_0001.png
+    idle_0002.png
+  walk/
+    walk_0001.png
+    walk_0002.png
+  happy.gif
+```
+
+```json
+{
+  "id": "my-2d-pet",
+  "name": "My 2D Pet",
+  "type": "sprite",
+  "model": "idle/idle_0001.png",
+  "preview": "preview.png",
+  "defaultAnimation": "idle",
+  "animations": {
+    "idle": {
+      "frames": ["idle/idle_0001.png", "idle/idle_0002.png"],
+      "fps": 12,
+      "loop": true
+    },
+    "walk": {
+      "frames": ["walk/walk_0001.png", "walk/walk_0002.png"],
+      "fps": 12,
+      "loop": true
+    },
+    "happy": { "file": "happy.gif", "loop": false }
+  },
+  "events": {
+    "onClick": "happy",
+    "onChatOpen": "happy",
+    "onUserSendMessage": "idle",
+    "onAiReplyEnd": "happy"
+  }
+}
+```
 
 ## Required License Hygiene
 

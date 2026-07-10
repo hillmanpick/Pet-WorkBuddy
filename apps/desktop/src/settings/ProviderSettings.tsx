@@ -91,6 +91,17 @@ export function ProviderSettings({
                 />
               </label>
               <label className="field">
+                <span>{labels.imageInputMode}</span>
+                <select
+                  value={provider.imageInputMode ?? "auto"}
+                  onChange={(event) => updateProvider(providerId, "imageInputMode", event.target.value)}
+                >
+                  <option value="auto">{labels.imageInputModeAuto}</option>
+                  <option value="enabled">{labels.imageInputModeEnabled}</option>
+                  <option value="disabled">{labels.imageInputModeDisabled}</option>
+                </select>
+              </label>
+              <label className="field">
                 <span>{labels.apiKey}</span>
                 <div className="inline-input">
                   <KeyRound size={15} />

@@ -79,8 +79,16 @@ pub fn import_pet_pack(
             return Err("Model file is larger than 120 MB.".to_string());
         }
         import_single_model_pet_pack(&app, &source, &extension)
+    } else if matches!(extension.as_str(), "gif" | "png" | "jpg" | "jpeg" | "webp") {
+        if metadata.len() > MAX_SINGLE_MODEL_BYTES {
+            return Err("Sprite file is larger than 120 MB.".to_string());
+        }
+        import_single_sprite_pet_pack(&app, &source, &extension)
     } else {
-        Err("Please choose a .glb, .vrm, .gltf, or .zip pet package.".to_string())
+        Err(
+            "Please choose a .glb, .vrm, .gltf, .gif, .png, .jpg, .webp, or .zip pet package."
+                .to_string(),
+        )
     }
 }
 
@@ -109,7 +117,9 @@ pub fn delete_custom_pet_pack(app: tauri::AppHandle, id: String) -> Result<(), S
 
         let target = fs::canonicalize(&path).map_err(|error| error.to_string())?;
         if !target.starts_with(&root) {
-            return Err("Refusing to delete a pet pack outside the custom pet directory.".to_string());
+            return Err(
+                "Refusing to delete a pet pack outside the custom pet directory.".to_string(),
+            );
         }
 
         fs::remove_dir_all(target).map_err(|error| error.to_string())?;
@@ -155,7 +165,55 @@ fn import_single_model_pet_pack(
     })
 }
 
-fn import_zip_pet_pack(app: &tauri::AppHandle, source: &Path) -> Result<ImportPetPackResult, String> {
+fn import_single_sprite_pet_pack(
+    app: &tauri::AppHandle,
+    source: &Path,
+    extension: &str,
+) -> Result<ImportPetPackResult, String> {
+    let root = custom_pets_root(app)?;
+    fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+
+    let name = title_from_stem(source);
+    let id = unique_custom_id(&name);
+    let target_dir = root.join(&id);
+    fs::create_dir_all(&target_dir).map_err(|error| error.to_string())?;
+
+    let sprite_name = format!("sprite.{extension}");
+    fs::copy(source, target_dir.join(&sprite_name)).map_err(|error| error.to_string())?;
+
+    let pack = json!({
+        "id": id,
+        "name": name,
+        "source": "User import",
+        "type": "sprite",
+        "model": sprite_name,
+        "preview": sprite_name,
+        "scale": 1.0,
+        "defaultAnimation": "idle",
+        "animations": {
+            "idle": { "file": sprite_name, "loop": true },
+            "walk": { "file": sprite_name, "loop": true },
+            "run": { "file": sprite_name, "loop": true },
+            "happy": { "file": sprite_name, "loop": true },
+            "positive": { "file": sprite_name, "loop": true },
+            "negative": { "file": sprite_name, "loop": true },
+            "rest": { "file": sprite_name, "loop": true }
+        },
+        "events": default_events()
+    });
+
+    let manifest_path = target_dir.join("pet.json");
+    write_pretty_json(&manifest_path, &pack)?;
+    Ok(ImportPetPackResult {
+        id,
+        path: manifest_path.display().to_string(),
+    })
+}
+
+fn import_zip_pet_pack(
+    app: &tauri::AppHandle,
+    source: &Path,
+) -> Result<ImportPetPackResult, String> {
     let root = custom_pets_root(app)?;
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
 
@@ -270,7 +328,11 @@ fn normalize_pet_pack_json(
             .unwrap_or_default();
         object.insert(
             "type".to_string(),
-            json!(if model_extension == "vrm" { "vrm" } else { "gltf" }),
+            json!(if model_extension == "vrm" {
+                "vrm"
+            } else {
+                "gltf"
+            }),
         );
     }
     if !object.contains_key("scale") {
@@ -390,6 +452,7 @@ fn ensure_allowed_asset(path: &Path) -> Result<(), String> {
             | "png"
             | "jpg"
             | "jpeg"
+            | "gif"
             | "webp"
             | "ktx2"
             | "json"
@@ -455,7 +518,11 @@ fn unique_custom_id(name: &str) -> String {
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
         .join("-");
-    let slug = if slug.is_empty() { "pet" } else { slug.as_str() };
+    let slug = if slug.is_empty() {
+        "pet"
+    } else {
+        slug.as_str()
+    };
     format!("custom-{slug}-{}", timestamp_millis())
 }
 

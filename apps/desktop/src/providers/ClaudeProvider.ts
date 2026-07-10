@@ -1,6 +1,7 @@
 import type { AiProvider, AiProviderInput, ChatResponse } from "./AiProvider";
 import { assertApiKey, textWithAttachments } from "./AiProvider";
-import type { ChatMessage } from "../config/schema";
+import type { ChatAttachment, ChatMessage } from "../config/schema";
+import { isSupportedImageMimeType, shouldSendVisionInput } from "./ProviderCapabilities";
 
 type ClaudeContentBlock =
   | { type: "text"; text: string }
@@ -30,7 +31,7 @@ export class ClaudeProvider implements AiProvider {
       body: JSON.stringify({
         model: input.config.modelId,
         system: input.config.systemPrompt,
-        messages: toClaudeMessages(input.messages),
+        messages: toClaudeMessages(input.messages, shouldSendVisionInput(input.providerId, input.config)),
         temperature: input.config.temperature,
         max_tokens: input.config.maxTokens,
       }),
@@ -57,26 +58,28 @@ export class ClaudeProvider implements AiProvider {
   }
 }
 
-function toClaudeMessages(messages: ChatMessage[]): ClaudeMessage[] {
+function toClaudeMessages(messages: ChatMessage[], supportsVision: boolean): ClaudeMessage[] {
   return messages
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } =>
       message.role === "user" || message.role === "assistant",
     )
     .map((message) => {
-      const imageAttachments = (message.attachments ?? []).filter(
-        (attachment) => attachment.kind === "image" && attachment.dataUrl && isClaudeImageType(attachment.mimeType),
-      );
+      const imageAttachments = supportsVision
+        ? (message.attachments ?? []).filter(isSendableClaudeImageAttachment)
+        : [];
+      const sentImageIds = new Set(imageAttachments.map((attachment) => attachment.id));
+      const contentText = textWithAttachments(message, { sentImageIds, visionSupported: supportsVision });
       if (message.role !== "user" || !imageAttachments.length) {
         return {
           role: message.role,
-          content: textWithAttachments(message),
+          content: contentText,
         };
       }
 
       return {
         role: message.role,
         content: [
-          { type: "text", text: textWithAttachments(message) || "Please analyze the attached image." },
+          { type: "text", text: contentText || "Please analyze the attached image." },
           ...imageAttachments.map((attachment) => ({
             type: "image" as const,
             source: {
@@ -90,8 +93,8 @@ function toClaudeMessages(messages: ChatMessage[]): ClaudeMessage[] {
     });
 }
 
-function isClaudeImageType(mimeType: string): boolean {
-  return ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(mimeType);
+function isSendableClaudeImageAttachment(attachment: ChatAttachment): boolean {
+  return attachment.kind === "image" && Boolean(attachment.dataUrl) && isSupportedImageMimeType(attachment.mimeType);
 }
 
 function dataUrlToBase64(dataUrl: string): string {

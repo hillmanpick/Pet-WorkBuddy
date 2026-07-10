@@ -16,6 +16,7 @@ type PromptBoxProps = {
   attachTitle: string;
   removeAttachmentTitle: string;
   attachmentWarningTitle: string;
+  onActivity: () => void;
   onSend: (message: ChatDraft) => void;
 };
 
@@ -27,6 +28,7 @@ export function PromptBox({
   attachTitle,
   removeAttachmentTitle,
   attachmentWarningTitle,
+  onActivity,
   onSend,
 }: PromptBoxProps) {
   const [value, setValue] = useState("");
@@ -58,6 +60,7 @@ export function PromptBox({
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    onActivity();
     const text = value.trim();
     if ((!text && !attachments.length) || disabled || reading) return;
     setValue("");
@@ -69,6 +72,7 @@ export function PromptBox({
   async function addFiles(files: FileList | File[]) {
     if (!files?.length || disabled) return;
 
+    onActivity();
     setReading(true);
     try {
       const result = await readChatAttachments(files);
@@ -99,6 +103,7 @@ export function PromptBox({
   function handleDragEnter(event: DragEvent<HTMLFormElement>) {
     if (!hasFileTransfer(event.dataTransfer) || disabled) return;
     event.preventDefault();
+    onActivity();
     dragDepthRef.current += 1;
     setDragActive(true);
   }
@@ -106,6 +111,7 @@ export function PromptBox({
   function handleDragOver(event: DragEvent<HTMLFormElement>) {
     if (!hasFileTransfer(event.dataTransfer) || disabled) return;
     event.preventDefault();
+    onActivity();
     event.dataTransfer.dropEffect = "copy";
     setDragActive(true);
   }
@@ -121,6 +127,7 @@ export function PromptBox({
   function handleDrop(event: DragEvent<HTMLFormElement>) {
     if (!hasFileTransfer(event.dataTransfer) || disabled) return;
     event.preventDefault();
+    onActivity();
     dragDepthRef.current = 0;
     setDragActive(false);
 
@@ -136,10 +143,12 @@ export function PromptBox({
     if (!files.length || disabled) return;
 
     event.preventDefault();
+    onActivity();
     void addFiles(files);
   }
 
   function removeAttachment(id: string) {
+    onActivity();
     setAttachments((current) => current.filter((attachment) => attachment.id !== id));
   }
 
@@ -189,7 +198,10 @@ export function PromptBox({
         type="button"
         disabled={disabled || reading}
         title={attachTitle}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          onActivity();
+          fileInputRef.current?.click();
+        }}
       >
         <Paperclip size={18} />
       </button>
@@ -199,9 +211,13 @@ export function PromptBox({
         rows={2}
         disabled={disabled}
         placeholder={placeholder}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => {
+          onActivity();
+          setValue(event.target.value);
+        }}
         onPaste={handlePaste}
         onKeyDown={(event) => {
+          onActivity();
           if (event.key === "Enter" && !event.shiftKey) {
             submit(event);
           }
