@@ -47,6 +47,16 @@ export function AbilitySettings({ config, labels, onConfigChange }: AbilitySetti
           <span>{labels.launchOnStartup}</span>
         </label>
         <p className="settings-note">{labels.launchOnStartupNote}</p>
+
+        <label className="toggle-field">
+          <input
+            type="checkbox"
+            checked={config.behavior.doNotDisturb}
+            onChange={(event) => updateBehavior({ doNotDisturb: event.target.checked })}
+          />
+          <span>{labels.doNotDisturb}</span>
+        </label>
+        <p className="settings-note">{labels.doNotDisturbNote}</p>
       </section>
 
       <section className="settings-group">

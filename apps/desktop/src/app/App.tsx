@@ -26,18 +26,22 @@ import { createMessage, requestAssistantReply } from "../chat/ChatController";
 import { loadChatHistory, saveChatHistory } from "../chat/ChatStore";
 import { bubbleTextFromMarkdown } from "../chat/MarkdownDisplay";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
-import { loadPetManifest, loadPetPack, loadPetPackById } from "../pet/PetPackLoader";
+import { loadPetCatalog, loadPetPackById } from "../pet/PetPackLoader";
 import { nextPetAction, randomIdleAction } from "../pet/PetRuntime";
 import type { PetEvent } from "../pet/PetStateMachine";
 import {
   centerAppWindow,
   closeCurrentWindow,
+  getGlobalCursorPosition,
+  getWindowFrame,
   getLaunchOnStartup,
   hideAppWindow,
+  isForegroundFullscreenApp,
   isTauriRuntime,
   listenTauriEvent,
   openSettingsWindow,
   setDesktopWindowMode,
+  setWindowMousePassthrough,
   showAppWindow,
   type ScreenEdge,
   walkAppWindowRandomly,
@@ -218,6 +222,9 @@ function PetApp() {
   const lastPetInteractionAtRef = useRef(Date.now());
   const lastClickActionRef = useRef<string | null>(null);
   const idleWalkRunningRef = useRef(false);
+  const hiddenByUserRef = useRef(false);
+  const hiddenByDoNotDisturbRef = useRef(false);
+  const mousePassthroughRef = useRef(false);
   const labels = translations[config.appearance.language];
   const hasFloatingBubble = Boolean((bubble || computerTask) && !tuckedEdge);
   const chatTheme = chatColorTheme(config.appearance.chatColor);
@@ -232,6 +239,20 @@ function PetApp() {
     void saveConfig(next);
     publishConfig(next);
   }, []);
+
+  const refreshPetCatalog = useCallback(
+    async (activePetId?: string) => {
+      const packs = await loadPetCatalog();
+      setPetCatalog(packs);
+      if (activePetId) {
+        updateConfig({
+          ...config,
+          activePetId,
+        });
+      }
+    },
+    [config, updateConfig],
+  );
 
   const appendAssistantMessage = useCallback((content: string) => {
     setMessages((current) => {
@@ -342,6 +363,8 @@ function PetApp() {
   }, [busy, labels.pet.idlePhrases, panel, petPack, playPetAction, scheduleIdleAction, showBubble]);
 
   const openChat = useCallback(() => {
+    hiddenByUserRef.current = false;
+    void showAppWindow();
     setPanel("chat");
     setFocusToken((value) => value + 1);
     triggerPet("onChatOpen", labels.pet.listening);
@@ -364,6 +387,7 @@ function PetApp() {
   }, []);
 
   const hidePet = useCallback(() => {
+    hiddenByUserRef.current = true;
     if (isTauriRuntime()) {
       setPanel("none");
       void hideAppWindow();
@@ -725,6 +749,7 @@ function PetApp() {
         return;
       }
       if (action === "centerPet") {
+        hiddenByUserRef.current = false;
         void centerAppWindow();
         triggerPet("onClick", labels.pet.back);
         return;
@@ -773,8 +798,7 @@ function PetApp() {
   }, []);
 
   useEffect(() => {
-    void loadPetManifest()
-      .then((manifest) => Promise.all(manifest.pets.map((entry) => loadPetPack(entry.path))))
+    void loadPetCatalog()
       .then(setPetCatalog)
       .catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
   }, []);
@@ -835,6 +859,123 @@ function PetApp() {
   }, [config.appearance.petSize, panel]);
 
   useEffect(() => {
+    if (!isTauriRuntime()) return undefined;
+
+    const interactiveSelectors = [
+      ".pet-stage",
+      ".pet-rotate-handle",
+      ".pet-toolbar",
+      ".pet-toolbar-reveal",
+      ".pet-bubble",
+      ".chat-panel",
+    ].join(",");
+    let disposed = false;
+
+    function pointHitsInteractiveElement(x: number, y: number) {
+      return Array.from(document.querySelectorAll<HTMLElement>(interactiveSelectors)).some((element) => {
+        const style = window.getComputedStyle(element);
+        if (style.pointerEvents === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) {
+          return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+        const padding = element.classList.contains("pet-stage") ? 2 : 8;
+        return (
+          x >= rect.left - padding &&
+          x <= rect.right + padding &&
+          y >= rect.top - padding &&
+          y <= rect.bottom + padding
+        );
+      });
+    }
+
+    async function updateMousePassthrough() {
+      if (disposed || hiddenByDoNotDisturbRef.current) return;
+
+      try {
+        const [pointer, frame] = await Promise.all([getGlobalCursorPosition(), getWindowFrame()]);
+        if (!pointer || !frame) return;
+
+        const scale = frame.scaleFactor || window.devicePixelRatio || 1;
+        const localX = (pointer.x - frame.x) / scale;
+        const localY = (pointer.y - frame.y) / scale;
+        const shouldPassthrough = !pointHitsInteractiveElement(localX, localY);
+
+        if (mousePassthroughRef.current !== shouldPassthrough) {
+          mousePassthroughRef.current = shouldPassthrough;
+          await setWindowMousePassthrough(shouldPassthrough);
+        }
+      } catch {
+        if (mousePassthroughRef.current) {
+          mousePassthroughRef.current = false;
+          void setWindowMousePassthrough(false);
+        }
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      void updateMousePassthrough();
+    }, 55);
+    void updateMousePassthrough();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      mousePassthroughRef.current = false;
+      void setWindowMousePassthrough(false);
+    };
+  }, [panel, toolbarHidden, tuckedEdge, bubble, computerTask, config.appearance.petSize]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return undefined;
+
+    let disposed = false;
+
+    async function updateDoNotDisturb() {
+      if (disposed) return;
+
+      if (!config.behavior.doNotDisturb) {
+        if (hiddenByDoNotDisturbRef.current) {
+          hiddenByDoNotDisturbRef.current = false;
+          mousePassthroughRef.current = false;
+          await setWindowMousePassthrough(false);
+          if (!hiddenByUserRef.current) {
+            await showAppWindow();
+          }
+        }
+        return;
+      }
+
+      const fullscreen = await isForegroundFullscreenApp().catch(() => false);
+      if (fullscreen && !hiddenByDoNotDisturbRef.current) {
+        hiddenByDoNotDisturbRef.current = true;
+        setPanel("none");
+        mousePassthroughRef.current = false;
+        await setWindowMousePassthrough(false);
+        await hideAppWindow();
+        return;
+      }
+
+      if (!fullscreen && hiddenByDoNotDisturbRef.current) {
+        hiddenByDoNotDisturbRef.current = false;
+        if (!hiddenByUserRef.current) {
+          await showAppWindow();
+        }
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      void updateDoNotDisturb();
+    }, 1500);
+    void updateDoNotDisturb();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [config.behavior.doNotDisturb]);
+
+  useEffect(() => {
     let disposeShortcut: () => void = () => undefined;
     let disposeTray: () => void = () => undefined;
     let disposed = false;
@@ -848,6 +989,8 @@ function PetApp() {
     });
     void listenTauriEvent<string>("workbuddy://tray", (payload) => {
       if (payload === "showPet") {
+        hiddenByUserRef.current = false;
+        void showAppWindow();
         setPanel("none");
         setToolbarHidden(false);
         markToolbarActivity();
@@ -985,6 +1128,7 @@ function PetApp() {
           onApiKeyDelete={handleApiKeyDelete}
           onSave={handleSave}
           onClose={() => setPanel("none")}
+          onPetCatalogChange={(activePetId) => void refreshPetCatalog(activePetId)}
         />
       ) : null}
     </main>
@@ -1003,6 +1147,20 @@ function SettingsApp() {
     publishConfig(next);
   }, []);
 
+  const refreshPetCatalog = useCallback(
+    async (activePetId?: string) => {
+      const packs = await loadPetCatalog();
+      setPetCatalog(packs);
+      if (activePetId) {
+        updateConfig({
+          ...config,
+          activePetId,
+        });
+      }
+    },
+    [config, updateConfig],
+  );
+
   useEffect(() => {
     void loadConfigWithStartupState().then(async (nextConfig) => {
       setConfig(nextConfig);
@@ -1018,8 +1176,7 @@ function SettingsApp() {
   }, []);
 
   useEffect(() => {
-    void loadPetManifest()
-      .then((manifest) => Promise.all(manifest.pets.map((entry) => loadPetPack(entry.path))))
+    void loadPetCatalog()
       .then(setPetCatalog)
       .catch(() => setPetCatalog([]));
   }, []);
@@ -1052,6 +1209,7 @@ function SettingsApp() {
         onApiKeyDelete={handleApiKeyDelete}
         onSave={handleSave}
         onClose={() => void closeCurrentWindow()}
+        onPetCatalogChange={(activePetId) => void refreshPetCatalog(activePetId)}
       />
     </main>
   );

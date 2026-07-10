@@ -21,9 +21,12 @@ WorkBuddy 是一个开源 AI 桌面宠物项目。它不是网页版，也不是
 
 | Version | Windows x64 installer | Release |
 | --- | --- | --- |
+| `v0.1.1` | [WorkBuddy_0.1.1_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.1/WorkBuddy_0.1.1_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.1) |
 | `v0.1.0` | [WorkBuddy_0.1.0_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.0/WorkBuddy_0.1.0_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.0) |
 
 All downloadable installers are published in [GitHub Releases](https://github.com/hillmanpick/Pet-WorkBuddy/releases). Source code users can still build locally with `pnpm desktop:pack`.
+
+更新方式：退出旧版 WorkBuddy 后，直接运行新版安装包覆盖安装即可。用户配置、聊天记录、API Key 和通过设置导入的自定义宠物模型会保留在用户数据目录中，不会因为覆盖安装丢失。
 
 ## 中文说明
 
@@ -380,7 +383,28 @@ cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 
 ### 宠物模型怎么换
 
-默认宠物资源位置：
+普通用户可以直接在应用里导入：
+
+1. 打开设置。
+2. 进入 `宠物` / `Pets` 页面。
+3. 点击 `导入模型`。
+4. 选择 `.glb`、`.vrm`、`.gltf` 或 `.zip` 文件。
+5. 导入成功后，新宠物会出现在宠物列表里，并自动切换过去。
+
+导入后的模型会复制到用户数据目录，覆盖安装新版 WorkBuddy 时会保留。单文件模型推荐使用 `.glb` 或 `.vrm`；如果模型依赖贴图、`.bin` 或多个资源文件，建议做成 zip 宠物包。
+
+zip 宠物包结构：
+
+```text
+my-pet.zip
+  pet.json
+  model.glb
+  preview.png
+  Textures/
+  LICENSE.txt
+```
+
+开发者也可以把宠物做成内置资源。默认宠物资源位置：
 
 ```text
 pet-packs/
@@ -427,7 +451,7 @@ LICENSE.txt
 
 1. 把宠物包放到 `apps/desktop/public/pet-packs/`。
 2. 在 `apps/desktop/public/pet-packs/manifest.json` 中加入宠物路径。
-3. 重启应用。
+3. 重新打包或重启开发版。
 4. 打开设置，在宠物页面选择新宠物。
 
 默认宠物资源来自 Kenney Cube Pets，资源许可为 CC0。详情见 `THIRD_PARTY_NOTICES.md`。
@@ -734,6 +758,26 @@ apps/desktop/public/pet-packs/manifest.json
 ```
 
 Restart WorkBuddy and select the pet in settings.
+
+End users can also import pets without editing the repository:
+
+1. Open Settings.
+2. Go to Pets.
+3. Click Import model.
+4. Choose a `.glb`, `.vrm`, `.gltf`, or `.zip` file.
+
+Imported pets are copied to the WorkBuddy app data directory, so they survive installer overwrite updates. Use `.glb` or `.vrm` for simple single-file models. Use a zip pet pack when the model needs textures, `.bin` files, or a custom `pet.json`.
+
+Zip pet pack shape:
+
+```text
+my-pet.zip
+  pet.json
+  model.glb
+  preview.png
+  Textures/
+  LICENSE.txt
+```
 
 ### Useful Commands
 

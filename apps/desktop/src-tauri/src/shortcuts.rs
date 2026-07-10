@@ -7,6 +7,11 @@ fn register_named_shortcut(
     name: &str,
     accelerator: &str,
 ) -> Result<(), String> {
+    if accelerator.trim().is_empty() {
+        return Ok(());
+    }
+
+    let _ = app.global_shortcut_manager().unregister(accelerator);
     let event_name = name.to_string();
     let handle = app.clone();
     app.global_shortcut_manager()

@@ -370,6 +370,16 @@ export async function centerAppWindow(): Promise<void> {
   await invokeCommand("center_app_window");
 }
 
+export async function setWindowMousePassthrough(enabled: boolean): Promise<void> {
+  if (!isTauriRuntime()) return;
+  await invokeCommand("set_mouse_passthrough", { enabled });
+}
+
+export async function isForegroundFullscreenApp(): Promise<boolean> {
+  if (!isTauriRuntime()) return false;
+  return invokeCommand<boolean>("is_foreground_fullscreen_app");
+}
+
 export async function getGlobalCursorPosition(): Promise<ScreenPoint | null> {
   if (!isTauriRuntime()) return null;
   return invokeCommand<ScreenPoint>("get_cursor_position");

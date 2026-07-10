@@ -42,6 +42,20 @@ export function PromptBox({
     inputRef.current?.focus();
   }, [focusToken]);
 
+  useEffect(() => {
+    function preventFileNavigation(event: globalThis.DragEvent) {
+      if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes("Files")) return;
+      event.preventDefault();
+    }
+
+    window.addEventListener("dragover", preventFileNavigation);
+    window.addEventListener("drop", preventFileNavigation);
+    return () => {
+      window.removeEventListener("dragover", preventFileNavigation);
+      window.removeEventListener("drop", preventFileNavigation);
+    };
+  }, []);
+
   function submit(event: FormEvent) {
     event.preventDefault();
     const text = value.trim();

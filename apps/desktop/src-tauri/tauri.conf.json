@@ -7,11 +7,17 @@
   },
   "package": {
     "productName": "WorkBuddy",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "tauri": {
     "allowlist": {
-      "all": true
+      "all": true,
+      "protocol": {
+        "asset": true,
+        "assetScope": [
+          "$APPDATA/pet-packs/**"
+        ]
+      }
     },
     "bundle": {
       "active": true,
@@ -45,6 +51,7 @@
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,
+        "fileDropEnabled": false,
         "resizable": true,
         "skipTaskbar": true,
         "center": true

@@ -1,7 +1,9 @@
-import { Check } from "lucide-react";
+import { Check, Trash2, Upload } from "lucide-react";
 import type { CSSProperties } from "react";
+import { useState } from "react";
 import type { WorkBuddyConfig } from "../config/schema";
 import type { Translations } from "../i18n";
+import { deleteCustomPetPack, pickAndImportPetPack } from "../pet/CustomPetManager";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
 import { resolvePetAsset } from "../pet/PetPackLoader";
 
@@ -10,6 +12,7 @@ type PetSettingsProps = {
   pets: LoadedPetPack[];
   labels: Translations["pets"];
   onConfigChange: (config: WorkBuddyConfig) => void;
+  onPetCatalogChange?: (activePetId?: string) => void;
 };
 
 const chatColorSwatches = [
@@ -20,7 +23,45 @@ const chatColorSwatches = [
   { id: "graphite", color: "#4b5563", labelKey: "chatColorGraphite" },
 ] as const;
 
-export function PetSettings({ config, pets, labels, onConfigChange }: PetSettingsProps) {
+export function PetSettings({ config, pets, labels, onConfigChange, onPetCatalogChange }: PetSettingsProps) {
+  const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+
+  async function handleImportPet() {
+    setImporting(true);
+    setImportStatus(null);
+    try {
+      const imported = await pickAndImportPetPack();
+      if (!imported) return;
+      setImportStatus(labels.importPetDone);
+      onPetCatalogChange?.(imported.id);
+    } catch (error) {
+      setImportStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleDeletePet(pet: LoadedPetPack) {
+    if (!pet.custom) return;
+    if (!window.confirm(labels.deletePetConfirm)) return;
+
+    setImportStatus(null);
+    try {
+      await deleteCustomPetPack(pet.id);
+      if (config.activePetId === pet.id) {
+        const fallback = pets.find((item) => item.id !== pet.id)?.id;
+        if (fallback) {
+          onConfigChange({ ...config, activePetId: fallback });
+        }
+      }
+      setImportStatus(labels.deletePetDone);
+      onPetCatalogChange?.();
+    } catch (error) {
+      setImportStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <div className="settings-stack">
       <section className="settings-group">
@@ -118,20 +159,41 @@ export function PetSettings({ config, pets, labels, onConfigChange }: PetSetting
 
       <section className="settings-group">
         <h3>{labels.choosePet}</h3>
+        <div className="pet-import-row">
+          <button type="button" disabled={importing} onClick={() => void handleImportPet()}>
+            <Upload size={16} />
+            {importing ? labels.importingPet : labels.importPet}
+          </button>
+          <p className="settings-help">{labels.importPetHelp}</p>
+        </div>
+        {importStatus ? <p className="settings-note">{importStatus}</p> : null}
         <div className="pet-picker">
           {pets.map((pet) => {
             const active = pet.id === config.activePetId;
             return (
-              <button
-                className={active ? "pet-card active" : "pet-card"}
-                type="button"
-                key={pet.id}
-                onClick={() => onConfigChange({ ...config, activePetId: pet.id })}
-              >
-                {pet.preview ? <img src={resolvePetAsset(pet, pet.preview)} alt="" /> : null}
-                <span>{pet.name}</span>
-                {active ? <Check size={16} /> : null}
-              </button>
+              <div className="pet-card-shell" key={pet.id}>
+                <button
+                  className={active ? "pet-card active" : "pet-card"}
+                  type="button"
+                  onClick={() => onConfigChange({ ...config, activePetId: pet.id })}
+                >
+                  {pet.preview ? <img src={resolvePetAsset(pet, pet.preview)} alt="" /> : null}
+                  <span>{pet.name}</span>
+                  {pet.custom ? <small>{labels.customPet}</small> : null}
+                  {active ? <Check size={16} /> : null}
+                </button>
+                {pet.custom ? (
+                  <button
+                    className="pet-card-delete"
+                    type="button"
+                    title={labels.deletePet}
+                    aria-label={labels.deletePet}
+                    onClick={() => void handleDeletePet(pet)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                ) : null}
+              </div>
             );
           })}
         </div>

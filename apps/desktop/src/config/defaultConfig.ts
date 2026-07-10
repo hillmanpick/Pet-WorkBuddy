@@ -74,7 +74,8 @@ export const defaultConfig: WorkBuddyConfig = {
     startHidden: false,
     launchOnStartup: false,
     longIdleMinutes: 5,
-    mousePassthrough: false,
+    doNotDisturb: false,
+    mousePassthrough: true,
   },
   agent: {
     enabled: true,
@@ -113,6 +114,8 @@ export function mergeConfig(value: Partial<WorkBuddyConfig> | null): WorkBuddyCo
     behavior: {
       ...defaultConfig.behavior,
       ...value.behavior,
+      doNotDisturb: value.behavior?.doNotDisturb ?? defaultConfig.behavior.doNotDisturb,
+      mousePassthrough: value.behavior?.mousePassthrough ?? defaultConfig.behavior.mousePassthrough,
     },
     agent: {
       ...defaultConfig.agent,

@@ -52,12 +52,24 @@ export function shortcutEntries(config: WorkBuddyConfig): Array<[ShortcutAction,
   ];
 }
 
+let registeredShortcuts = new Set<string>();
+
 export async function registerConfiguredShortcuts(config: WorkBuddyConfig): Promise<void> {
   if (!isTauriRuntime()) return;
 
+  const nextEntries = shortcutEntries(config)
+    .map(([name, accelerator]) => [name, normalizeShortcut(accelerator)] as const)
+    .filter(([, accelerator]) => Boolean(accelerator));
+  const nextAccelerators = new Set(nextEntries.map(([, accelerator]) => accelerator));
+
   await Promise.allSettled(
-    shortcutEntries(config).map(([name, accelerator]) =>
-      invokeCommand("register_shortcut", { name, accelerator: normalizeShortcut(accelerator) }),
-    ),
+    Array.from(registeredShortcuts)
+      .filter((accelerator) => !nextAccelerators.has(accelerator))
+      .map((accelerator) => invokeCommand("unregister_shortcut", { accelerator })),
   );
+
+  await Promise.allSettled(
+    nextEntries.map(([name, accelerator]) => invokeCommand("register_shortcut", { name, accelerator })),
+  );
+  registeredShortcuts = nextAccelerators;
 }

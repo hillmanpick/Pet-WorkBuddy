@@ -63,6 +63,7 @@ export type WorkBuddyConfig = {
     startHidden: boolean;
     launchOnStartup: boolean;
     longIdleMinutes: number;
+    doNotDisturb: boolean;
     mousePassthrough: boolean;
   };
   agent: AgentConfig;

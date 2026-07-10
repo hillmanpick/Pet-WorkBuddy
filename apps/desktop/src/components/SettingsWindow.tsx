@@ -20,6 +20,7 @@ type SettingsWindowProps = {
   onApiKeyDelete: (provider: ProviderId) => void;
   onSave: () => void;
   onClose: () => void;
+  onPetCatalogChange?: (activePetId?: string) => void;
 };
 
 type SettingsTab = "providers" | "pets" | "shortcuts" | "abilities" | "agent" | "history";
@@ -34,6 +35,7 @@ export function SettingsWindow({
   onApiKeyDelete,
   onSave,
   onClose,
+  onPetCatalogChange,
 }: SettingsWindowProps) {
   const [tab, setTab] = useState<SettingsTab>("providers");
 
@@ -95,6 +97,7 @@ export function SettingsWindow({
             pets={pets}
             labels={labels.pets}
             onConfigChange={onConfigChange}
+            onPetCatalogChange={onPetCatalogChange}
           />
         ) : null}
         {tab === "shortcuts" ? (
