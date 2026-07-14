@@ -21,6 +21,7 @@ WorkBuddy 是一个开源 AI 桌面宠物项目。它不是网页版，也不是
 
 | Version | Windows x64 installer | Release |
 | --- | --- | --- |
+| `v0.1.4` | [WorkBuddy_0.1.4_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.4/WorkBuddy_0.1.4_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.4) |
 | `v0.1.3` | [WorkBuddy_0.1.3_x64-setup.exe](https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.3_x64-setup.exe) | Startup update checks included |
 | `v0.1.1` | [WorkBuddy_0.1.1_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.1/WorkBuddy_0.1.1_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.1) |
 | `v0.1.0` | [WorkBuddy_0.1.0_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.0/WorkBuddy_0.1.0_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.0) |
