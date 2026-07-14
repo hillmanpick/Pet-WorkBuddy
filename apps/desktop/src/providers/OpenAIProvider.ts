@@ -2,6 +2,7 @@ import type { AiProvider, AiProviderInput, ChatResponse } from "./AiProvider";
 import { assertApiKey, textWithAttachments } from "./AiProvider";
 import type { ChatAttachment, ChatMessage, ProviderId } from "../config/schema";
 import { isSupportedImageMimeType, shouldSendVisionInput } from "./ProviderCapabilities";
+import { parseProviderJson, postProviderJson, resolveOpenAIEndpoint } from "./ProviderHttp";
 
 type OpenAIMessageContent =
   | string
@@ -22,7 +23,7 @@ export class OpenAIProvider implements AiProvider {
   async chat(input: AiProviderInput): Promise<ChatResponse> {
     assertApiKey(input.apiKey, input.config.displayName);
 
-    const endpoint = `${input.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
+    const endpoint = resolveOpenAIEndpoint(input.config.baseUrl);
     const supportsVision = this.supportsVision(input);
     const buildMessages = (includeVision: boolean): OpenAIChatMessage[] => [
       { role: "system", content: input.config.systemPrompt },
@@ -30,25 +31,25 @@ export class OpenAIProvider implements AiProvider {
     ];
 
     const postChat = (messages: OpenAIChatMessage[]) =>
-      fetch(endpoint, {
-        method: "POST",
-        signal: input.signal,
-        headers: {
+      postProviderJson(
+        endpoint,
+        {
           "Content-Type": "application/json",
           Authorization: `Bearer ${input.apiKey}`,
         },
-        body: JSON.stringify({
+        {
           model: input.config.modelId,
           messages,
           temperature: input.config.temperature,
           max_tokens: input.config.maxTokens,
-        }),
-      });
+        },
+        input.signal,
+      );
 
     let response = await postChat(buildMessages(supportsVision));
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = response.text;
       if (supportsVision && hasImageAttachments(input.messages) && isVisionPayloadError(errorText)) {
         response = await postChat(buildMessages(false));
       } else {
@@ -57,10 +58,10 @@ export class OpenAIProvider implements AiProvider {
     }
 
     if (!response.ok) {
-      throw new Error(await response.text());
+      throw new Error(response.text);
     }
 
-    const raw = await response.json();
+    const raw = parseProviderJson<{ choices?: Array<{ message?: { content?: string } }> }>(response);
     const text = raw.choices?.[0]?.message?.content ?? "";
     return { text, raw };
   }

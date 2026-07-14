@@ -7,11 +7,18 @@
   },
   "package": {
     "productName": "WorkBuddy",
-    "version": "0.1.2"
+    "version": "0.1.3"
   },
   "tauri": {
     "allowlist": {
       "all": true,
+      "http": {
+        "all": true,
+        "scope": [
+          "https://*",
+          "http://*"
+        ]
+      },
       "protocol": {
         "asset": true,
         "assetScope": [

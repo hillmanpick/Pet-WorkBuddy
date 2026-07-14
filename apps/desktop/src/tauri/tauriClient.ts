@@ -7,6 +7,8 @@ export type WindowFrame = ScreenPoint & { scaleFactor: number };
 export type PointerState = ScreenPoint & { leftPressed: boolean };
 export type PointerDragResult = { activated: boolean; edge: ScreenEdge | null };
 
+type PointerSample = ScreenPoint & { time: number };
+
 const FLOATING_BUBBLE_WINDOW_HEIGHT = 128;
 const FLOATING_BUBBLE_STAGE_OFFSET = 122;
 const PET_WINDOW_TOP = 12;
@@ -14,6 +16,9 @@ const PET_STAGE_PADDING_TOP = 34;
 
 let previousDesktopWindowLayout: { mode: DesktopWindowMode; petSize: number; hasFloatingBubble: boolean } | null = null;
 let settingsWindowOpenPromise: Promise<void> | null = null;
+let desiredMousePassthrough = false;
+let appliedMousePassthrough: boolean | null = null;
+let mousePassthroughFlush: Promise<void> | null = null;
 
 type TauriWindow = Window & {
   __TAURI__?: unknown;
@@ -381,9 +386,27 @@ export async function centerAppWindow(): Promise<void> {
   await invokeCommand("center_app_window");
 }
 
-export async function setWindowMousePassthrough(enabled: boolean): Promise<void> {
-  if (!isTauriRuntime()) return;
-  await invokeCommand("set_mouse_passthrough", { enabled });
+export function setWindowMousePassthrough(enabled: boolean): Promise<void> {
+  if (!isTauriRuntime()) return Promise.resolve();
+  desiredMousePassthrough = enabled;
+  if (mousePassthroughFlush) return mousePassthroughFlush;
+
+  let completed = false;
+  mousePassthroughFlush = (async () => {
+    while (appliedMousePassthrough !== desiredMousePassthrough) {
+      const next = desiredMousePassthrough;
+      await invokeCommand("set_mouse_passthrough", { enabled: next });
+      appliedMousePassthrough = next;
+    }
+    completed = true;
+  })().finally(() => {
+    mousePassthroughFlush = null;
+    if (completed && appliedMousePassthrough !== desiredMousePassthrough) {
+      void setWindowMousePassthrough(desiredMousePassthrough);
+    }
+  });
+
+  return mousePassthroughFlush;
 }
 
 export async function isForegroundFullscreenApp(): Promise<boolean> {
@@ -417,17 +440,19 @@ export async function dragWindowWithPointer(
   petSize = 190,
   options: {
     activationDistance?: number;
+    motionFps?: number;
     startEdge?: ScreenEdge | null;
     onActivated?: () => void;
   } = {},
 ): Promise<PointerDragResult> {
   if (!isTauriRuntime()) return { activated: false, edge: null };
 
-  const { appWindow, PhysicalPosition } = await import("@tauri-apps/api/window");
+  const { appWindow, currentMonitor, PhysicalPosition } = await import("@tauri-apps/api/window");
   const [startPointer, startPosition] = await Promise.all([getPointerState(), appWindow.outerPosition()]);
   if (!startPointer?.leftPressed) return { activated: false, edge: null };
 
   const activationDistance = options.activationDistance ?? 2;
+  const frameIntervalMs = motionFrameInterval(options.motionFps);
   writeAppLog("dragWindowWithPointer:start", { startPointer, startPosition, startEdge: options.startEdge });
   let activated = false;
   let lastX = startPosition.x;
@@ -435,6 +460,9 @@ export async function dragWindowWithPointer(
   let moveInFlight = false;
   let moveGeneration = 0;
   let queuedPosition: { x: number; y: number } | null = null;
+  const pointerSamples: PointerSample[] = [
+    { x: startPointer.x, y: startPointer.y, time: performance.now() },
+  ];
 
   function flushMoveQueue() {
     if (moveInFlight || !queuedPosition) return;
@@ -495,6 +523,7 @@ export async function dragWindowWithPointer(
     const dragStartedAt = performance.now();
 
     const tick = () => {
+      const tickStartedAt = performance.now();
       if (settled) return;
       if (performance.now() - dragStartedAt > 30_000) {
         writeAppLog("dragWindowWithPointer:dragTimeout", { activated, lastX, lastY });
@@ -513,6 +542,12 @@ export async function dragWindowWithPointer(
             return;
           }
 
+          const sampleTime = performance.now();
+          pointerSamples.push({ x: pointer.x, y: pointer.y, time: sampleTime });
+          while (pointerSamples.length > 2 && sampleTime - pointerSamples[0].time > 120) {
+            pointerSamples.shift();
+          }
+
           const dx = pointer.x - startPointer.x;
           const dy = pointer.y - startPointer.y;
           if (!activated && Math.hypot(dx, dy) >= activationDistance) {
@@ -527,7 +562,8 @@ export async function dragWindowWithPointer(
             queueMove(x, y);
           }
 
-          window.setTimeout(tick, 16);
+          const delay = Math.max(0, frameIntervalMs - (performance.now() - tickStartedAt));
+          window.setTimeout(tick, delay);
         })
         .catch(() => {
           settled = true;
@@ -540,14 +576,125 @@ export async function dragWindowWithPointer(
 
   if (!activated) return { activated, edge: null };
 
+  const velocity = dragReleaseVelocity(pointerSamples);
+  if (Math.hypot(velocity.x, velocity.y) >= 0.16) {
+    const monitor = await currentMonitor();
+    const size = await appWindow.outerSize();
+    if (monitor) {
+      const bounds = petVisualBounds(size, petSize, monitor.scaleFactor || 1);
+      const area = {
+        x: monitor.position.x,
+        y: monitor.position.y,
+        width: monitor.size.width,
+        height: monitor.size.height,
+      };
+      const finalPosition = await applyDragInertia({
+        x: lastX,
+        y: lastY,
+        velocity,
+        bounds,
+        area,
+        frameIntervalMs,
+        queueMove,
+        waitForMoveQueue,
+      });
+      lastX = finalPosition.x;
+      lastY = finalPosition.y;
+    }
+  }
+
   const edge = await snapWindowToScreenEdge(visibleStripForPet(petSize), petSize);
   writeAppLog("dragWindowWithPointer:end", { edge });
   return { activated, edge };
 }
 
+function dragReleaseVelocity(samples: PointerSample[]): ScreenPoint {
+  if (samples.length < 2) return { x: 0, y: 0 };
+  const latest = samples[samples.length - 1];
+  const earliest = samples[0];
+  const elapsed = Math.max(1, latest.time - earliest.time);
+  const rawX = (latest.x - earliest.x) / elapsed;
+  const rawY = (latest.y - earliest.y) / elapsed;
+  const speed = Math.hypot(rawX, rawY);
+  const maxSpeed = 2.2;
+  if (speed <= maxSpeed) return { x: rawX, y: rawY };
+  const scale = maxSpeed / speed;
+  return { x: rawX * scale, y: rawY * scale };
+}
+
+async function applyDragInertia(input: {
+  x: number;
+  y: number;
+  velocity: ScreenPoint;
+  bounds: { left: number; right: number; top: number; bottom: number };
+  area: { x: number; y: number; width: number; height: number };
+  frameIntervalMs: number;
+  queueMove: (x: number, y: number) => void;
+  waitForMoveQueue: () => Promise<void>;
+}): Promise<ScreenPoint> {
+  const friction = 0.0048;
+  const stopSpeed = 0.045;
+  const maxDuration = 650;
+  const minX = input.area.x - input.bounds.left;
+  const maxX = input.area.x + input.area.width - input.bounds.right;
+  const minY = input.area.y - input.bounds.top;
+  const maxY = input.area.y + input.area.height - input.bounds.bottom;
+  let x = input.x;
+  let y = input.y;
+  let vx = input.velocity.x;
+  let vy = input.velocity.y;
+  let previousTime = performance.now();
+  const startedAt = previousTime;
+
+  await new Promise<void>((resolve) => {
+    const tick = () => {
+      const now = performance.now();
+      const elapsed = Math.min(34, Math.max(1, now - previousTime));
+      previousTime = now;
+
+      x += vx * elapsed;
+      y += vy * elapsed;
+      if (x <= minX || x >= maxX) {
+        x = Math.min(maxX, Math.max(minX, x));
+        vx = 0;
+      }
+      if (y <= minY || y >= maxY) {
+        y = Math.min(maxY, Math.max(minY, y));
+        vy = 0;
+      }
+
+      input.queueMove(Math.round(x), Math.round(y));
+      const speed = Math.hypot(vx, vy);
+      const nextSpeed = Math.max(0, speed - friction * elapsed);
+      if (speed > 0) {
+        const scale = nextSpeed / speed;
+        vx *= scale;
+        vy *= scale;
+      }
+
+      if (nextSpeed <= stopSpeed || now - startedAt >= maxDuration || (!vx && !vy)) {
+        resolve();
+        return;
+      }
+      window.setTimeout(tick, input.frameIntervalMs);
+    };
+
+    tick();
+  });
+
+  await input.waitForMoveQueue();
+  const finalPosition = { x: Math.round(x), y: Math.round(y) };
+  writeAppLog("dragWindowWithPointer:inertiaEnd", {
+    velocity: input.velocity,
+    finalPosition,
+  });
+  return finalPosition;
+}
+
 export async function walkAppWindowRandomly(
   durationMs = 4200,
   onMoveStart?: (movement: { dx: number; dy: number }) => void,
+  motionFps = 90,
 ): Promise<{ dx: number; dy: number } | null> {
   if (!isTauriRuntime()) return null;
 
@@ -575,6 +722,7 @@ export async function walkAppWindowRandomly(
     dy: target.y - start.y,
   };
   const startedAt = performance.now();
+  const frameIntervalMs = motionFrameInterval(motionFps);
 
   await appWindow.show();
   onMoveStart?.(movement);
@@ -588,7 +736,7 @@ export async function walkAppWindowRandomly(
       void appWindow.setPosition(new PhysicalPosition(x, y)).catch(() => undefined);
 
       if (progress < 1) {
-        window.setTimeout(tick, 30);
+        window.setTimeout(tick, frameIntervalMs);
       } else {
         resolve();
       }
@@ -598,6 +746,11 @@ export async function walkAppWindowRandomly(
   });
 
   return movement;
+}
+
+function motionFrameInterval(value: number | undefined): number {
+  const fps = value === 30 || value === 60 || value === 90 || value === 120 ? value : 90;
+  return 1000 / fps;
 }
 
 function isWindowOutsideMonitor(

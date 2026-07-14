@@ -1,4 +1,4 @@
-import type { WorkBuddyConfig } from "./schema";
+import type { MotionFps, WorkBuddyConfig } from "./schema";
 
 export const defaultConfig: WorkBuddyConfig = {
   activeProvider: "openai",
@@ -79,6 +79,7 @@ export const defaultConfig: WorkBuddyConfig = {
     longIdleMinutes: 5,
     doNotDisturb: false,
     mousePassthrough: true,
+    motionFps: 90,
   },
   agent: {
     enabled: true,
@@ -119,6 +120,7 @@ export function mergeConfig(value: Partial<WorkBuddyConfig> | null): WorkBuddyCo
       ...value.behavior,
       doNotDisturb: value.behavior?.doNotDisturb ?? defaultConfig.behavior.doNotDisturb,
       mousePassthrough: value.behavior?.mousePassthrough ?? defaultConfig.behavior.mousePassthrough,
+      motionFps: normalizeMotionFps(value.behavior?.motionFps),
     },
     agent: {
       ...defaultConfig.agent,
@@ -134,4 +136,11 @@ export function mergeConfig(value: Partial<WorkBuddyConfig> | null): WorkBuddyCo
     },
     quickCommands: value.quickCommands ?? defaultConfig.quickCommands,
   };
+}
+
+function normalizeMotionFps(value: unknown): MotionFps {
+  const fps = Number(value);
+  return fps === 30 || fps === 60 || fps === 90 || fps === 120
+    ? fps
+    : defaultConfig.behavior.motionFps;
 }

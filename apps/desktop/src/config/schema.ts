@@ -1,6 +1,7 @@
 export type ProviderId = "openai" | "claude" | "deepseek";
 export type UiLanguage = "en" | "zh";
 export type ImageInputMode = "auto" | "enabled" | "disabled";
+export type MotionFps = 30 | 60 | 90 | 120;
 
 export type ProviderConfig = {
   enabled: boolean;
@@ -67,6 +68,7 @@ export type WorkBuddyConfig = {
     longIdleMinutes: number;
     doNotDisturb: boolean;
     mousePassthrough: boolean;
+    motionFps: MotionFps;
   };
   agent: AgentConfig;
   computerControl: ComputerControlConfig;

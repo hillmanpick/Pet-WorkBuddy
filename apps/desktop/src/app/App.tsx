@@ -60,6 +60,7 @@ import {
   saveConfig,
   setApiKey,
 } from "../settings/SettingsStore";
+import { checkForUpdatesOnStartup } from "../updates/UpdateService";
 
 type Panel = "none" | "chat" | "settings";
 const CONFIG_CHANNEL = "workbuddy.config";
@@ -229,6 +230,7 @@ function PetApp() {
   const hiddenByUserRef = useRef(false);
   const hiddenByDoNotDisturbRef = useRef(false);
   const mousePassthroughRef = useRef(false);
+  const mousePassthroughResumeAtRef = useRef(0);
   const labels = translations[config.appearance.language];
   const hasFloatingBubble = Boolean((bubble || computerTask) && !tuckedEdge);
   const chatTheme = chatColorTheme(config.appearance.chatColor);
@@ -368,9 +370,13 @@ function PetApp() {
     showBubble(randomFrom(labels.pet.idlePhrases), 3600);
 
     try {
-      const movement = await walkAppWindowRandomly(5200, ({ dx, dy }) => {
-        setPetRotationYaw(yawForMovement(dx, dy));
-      });
+      const movement = await walkAppWindowRandomly(
+        5200,
+        ({ dx, dy }) => {
+          setPetRotationYaw(yawForMovement(dx, dy));
+        },
+        config.behavior.motionFps,
+      );
       if (movement) {
         setPetRotationYaw(yawForMovement(movement.dx, movement.dy));
       }
@@ -378,7 +384,7 @@ function PetApp() {
       idleWalkRunningRef.current = false;
       scheduleIdleAction(700);
     }
-  }, [busy, labels.pet.idlePhrases, panel, petPack, playPetAction, scheduleIdleAction, showBubble, tuckedEdge]);
+  }, [busy, config.behavior.motionFps, labels.pet.idlePhrases, panel, petPack, playPetAction, scheduleIdleAction, showBubble, tuckedEdge]);
 
   const openChat = useCallback(() => {
     hiddenByUserRef.current = false;
@@ -805,6 +811,7 @@ function PetApp() {
       );
       setApiKeys(nextKeys);
       loadedRef.current = true;
+      void checkForUpdatesOnStartup(nextConfig.appearance.language);
     });
   }, []);
 
@@ -928,7 +935,7 @@ function PetApp() {
       if (disposed || hiddenByDoNotDisturbRef.current) return;
 
       try {
-        if (petDragging) {
+        if (petDragging || Date.now() < mousePassthroughResumeAtRef.current) {
           if (mousePassthroughRef.current) {
             mousePassthroughRef.current = false;
             await setWindowMousePassthrough(false);
@@ -964,8 +971,6 @@ function PetApp() {
     return () => {
       disposed = true;
       window.clearInterval(timer);
-      mousePassthroughRef.current = false;
-      void setWindowMousePassthrough(false);
     };
   }, [panel, toolbarHidden, tuckedEdge, bubble, computerTask, config.appearance.petSize, petDragging]);
 
@@ -1112,6 +1117,7 @@ function PetApp() {
         computerLabels={labels.computer}
         labels={labels.pet}
         petSize={config.appearance.petSize}
+        motionFps={config.behavior.motionFps}
         petDisplayName={config.appearance.petName.trim() || petPack?.name}
         busy={busy}
         toolbarHidden={toolbarHidden}
@@ -1145,12 +1151,14 @@ function PetApp() {
         }}
         onDragStart={() => {
           writeAppLog("App:dragStart", { tuckedEdge });
+          mousePassthroughResumeAtRef.current = Number.POSITIVE_INFINITY;
           setPetDragging(true);
           markToolbarActivity();
           triggerPet("onDragStart");
         }}
         onDragEnd={() => {
           writeAppLog("App:dragEnd", { tuckedEdge });
+          mousePassthroughResumeAtRef.current = Date.now() + 350;
           setPetDragging(false);
           markToolbarActivity();
           triggerPet("onDragEnd");

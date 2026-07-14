@@ -27,6 +27,10 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Python cache
+__pycache__/
+*.py[cod]
+
 # Editors and OS files
 .vscode/
 .idea/

@@ -43,9 +43,15 @@ pub fn center_app_window(window: tauri::Window) -> Result<(), String> {
 
 #[tauri::command]
 pub fn set_mouse_passthrough(window: tauri::Window, enabled: bool) -> Result<(), String> {
-    window
+    crate::app_log::write_line(&format!("set_mouse_passthrough:start enabled={enabled}"));
+    let result = window
         .set_ignore_cursor_events(enabled)
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string());
+    crate::app_log::write_line(&format!(
+        "set_mouse_passthrough:end enabled={enabled} ok={}",
+        result.is_ok()
+    ));
+    result
 }
 
 #[tauri::command]

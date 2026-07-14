@@ -2,6 +2,7 @@ import type { AiProvider, AiProviderInput, ChatResponse } from "./AiProvider";
 import { assertApiKey, textWithAttachments } from "./AiProvider";
 import type { ChatAttachment, ChatMessage } from "../config/schema";
 import { isSupportedImageMimeType, shouldSendVisionInput } from "./ProviderCapabilities";
+import { parseProviderJson, postProviderJson, resolveClaudeEndpoint } from "./ProviderHttp";
 
 type ClaudeContentBlock =
   | { type: "text"; text: string }
@@ -19,29 +20,29 @@ export class ClaudeProvider implements AiProvider {
   async chat(input: AiProviderInput): Promise<ChatResponse> {
     assertApiKey(input.apiKey, input.config.displayName);
 
-    const endpoint = `${input.config.baseUrl.replace(/\/$/, "")}/v1/messages`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      signal: input.signal,
-      headers: {
+    const endpoint = resolveClaudeEndpoint(input.config.baseUrl);
+    const response = await postProviderJson(
+      endpoint,
+      {
         "Content-Type": "application/json",
         "x-api-key": input.apiKey,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({
+      {
         model: input.config.modelId,
         system: input.config.systemPrompt,
         messages: toClaudeMessages(input.messages, shouldSendVisionInput(input.providerId, input.config)),
         temperature: input.config.temperature,
         max_tokens: input.config.maxTokens,
-      }),
-    });
+      },
+      input.signal,
+    );
 
     if (!response.ok) {
-      throw new Error(await response.text());
+      throw new Error(response.text);
     }
 
-    const raw = await response.json();
+    const raw = parseProviderJson<{ content?: Array<{ type?: string; text?: string }> }>(response);
     const text = Array.isArray(raw.content)
       ? raw.content
           .filter((part: { type?: string }) => part.type === "text")

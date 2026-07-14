@@ -21,11 +21,11 @@ WorkBuddy 是一个开源 AI 桌面宠物项目。它不是网页版，也不是
 
 | Version | Windows x64 installer | Release |
 | --- | --- | --- |
-| `v0.1.2` | [WorkBuddy_0.1.2_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.2/WorkBuddy_0.1.2_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.2) |
+| `v0.1.3` | [WorkBuddy_0.1.3_x64-setup.exe](https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.3_x64-setup.exe) | Startup update checks included |
 | `v0.1.1` | [WorkBuddy_0.1.1_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.1/WorkBuddy_0.1.1_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.1) |
 | `v0.1.0` | [WorkBuddy_0.1.0_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.0/WorkBuddy_0.1.0_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.0) |
 
-All downloadable installers are published in [GitHub Releases](https://github.com/hillmanpick/Pet-WorkBuddy/releases). Source code users can still build locally with `pnpm desktop:pack`.
+The newest installer is available from the project download server. Previous installers and release notes remain available in [GitHub Releases](https://github.com/hillmanpick/Pet-WorkBuddy/releases). Source code users can still build locally with `pnpm desktop:pack`.
 
 更新方式：退出旧版 WorkBuddy 后，直接运行新版安装包覆盖安装即可。用户配置、聊天记录、API Key 和通过设置导入的自定义宠物模型会保留在用户数据目录中，不会因为覆盖安装丢失。
 
@@ -51,6 +51,7 @@ WorkBuddy 的目标是做一个开源的 AI 桌面伙伴：它保留桌宠的陪
 - 真实桌面应用：Tauri + Rust，不使用 Electron。
 - 透明桌宠窗口：可拖动、可调大小、可旋转、可隐藏到系统托盘。
 - 侧边缩进：把宠物拖到屏幕边缘后会缩进屏幕，只露出一部分，鼠标移过去会探头出来。
+- 平滑移动：支持 30、60、90、120 FPS 四档移动帧率，默认使用稳定性和流畅度更均衡的 90 FPS。
 - 桌宠交互：点击宠物会触发随机动作和台词，长时间不互动会自动在屏幕内移动。
 - 视觉跟随：宠物会轻微朝向鼠标，移动更有“活着”的感觉。
 - 轻量聊天：宠物下方是输入框，AI 回复显示在宠物正上方气泡里。
@@ -59,6 +60,7 @@ WorkBuddy 的目标是做一个开源的 AI 桌面伙伴：它保留桌宠的陪
 - 自定义外观：宠物名称、宠物大小、聊天框颜色、中英文 UI。
 - 快捷键和快捷指令：可以配置全局快捷键，也可以添加自己的常用指令。
 - 开机自启动：可在设置中打开或关闭，不需要管理员权限。
+- 启动更新检查：每次启动异步检查最新版本，发现更新后由用户确认是否打开安装包下载页面。
 - 聊天记录：本地保存，可在设置里按日期查看，带时间戳。
 - 本地 Agent：内置 filesystem、terminal、browser、app、screen、clipboard、office、confirm 等工具。
 - 权限控制：高风险操作需要确认，并记录本地执行日志。
@@ -522,12 +524,14 @@ Users bring their own API keys, configure model providers locally, chat with the
 - Real desktop app powered by Tauri + Rust.
 - Transparent draggable desktop pet.
 - Pet resize, manual 360-degree rotation, edge tuck, hover peek, and system tray restore.
+- Selectable 30, 60, 90, or 120 FPS motion, with 90 FPS as the balanced default.
 - Speech bubbles above the pet and a compact chat input below it.
 - Markdown-friendly chat display with clean short pet bubbles.
 - Image/file upload, drag-and-drop, and clipboard paste.
 - Custom pet name, pet size, chat color, Chinese/English UI.
 - Global shortcuts and custom quick commands.
 - Launch-on-startup toggle.
+- Startup update checks with a user-confirmed installer download prompt.
 - Local chat history grouped by date with timestamps.
 - Codex-style local Agent runtime with tool plugins, risk levels, confirmations, and audit logs.
 - Custom GLB/GLTF pet packs with animation and event mappings.

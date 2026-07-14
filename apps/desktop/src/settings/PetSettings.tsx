@@ -1,7 +1,7 @@
 import { Check, Trash2, Upload } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useState } from "react";
-import type { WorkBuddyConfig } from "../config/schema";
+import type { MotionFps, WorkBuddyConfig } from "../config/schema";
 import type { Translations } from "../i18n";
 import { deleteCustomPetPack, pickAndImportPetPack } from "../pet/CustomPetManager";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
@@ -22,6 +22,7 @@ const chatColorSwatches = [
   { id: "amber", color: "#b8792f", labelKey: "chatColorAmber" },
   { id: "graphite", color: "#4b5563", labelKey: "chatColorGraphite" },
 ] as const;
+const motionFpsOptions: MotionFps[] = [30, 60, 90, 120];
 
 export function PetSettings({ config, pets, labels, onConfigChange, onPetCatalogChange }: PetSettingsProps) {
   const [importing, setImporting] = useState(false);
@@ -123,6 +124,28 @@ export function PetSettings({ config, pets, labels, onConfigChange, onPetCatalog
               }
             />
             <output>{config.appearance.petSize}px</output>
+          </label>
+
+          <label className="field">
+            <span>{labels.motionFps}</span>
+            <select
+              value={config.behavior.motionFps}
+              onChange={(event) =>
+                onConfigChange({
+                  ...config,
+                  behavior: {
+                    ...config.behavior,
+                    motionFps: Number(event.target.value) as MotionFps,
+                  },
+                })
+              }
+            >
+              {motionFpsOptions.map((fps) => (
+                <option value={fps} key={fps}>
+                  {fps} FPS{fps === 90 ? ` (${labels.motionFpsRecommended})` : fps === 120 ? ` (${labels.motionFpsHigh})` : ""}
+                </option>
+              ))}
+            </select>
           </label>
 
           <div className="field">

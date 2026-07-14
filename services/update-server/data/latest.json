@@ -1,0 +1,21 @@
+{
+  "product": "WorkBuddy",
+  "platform": "windows-x86_64",
+  "version": "0.1.3",
+  "downloadUrl": "https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.3_x64-setup.exe",
+  "sha256": "0820d7ba3ccc5b89df1bf10a6d3fcfb1bf79559f5630a8d57de08aec688e8ad4",
+  "size": 2883371,
+  "publishedAt": "2026-07-14T09:33:28Z",
+  "notes": {
+    "zh": [
+      "新增启动时自动检查更新和原生更新提示",
+      "中转站模型请求改用 Tauri 原生网络通道",
+      "宠物拖动新增惯性减速和屏幕边界保护"
+    ],
+    "en": [
+      "Added startup update checks and a native update prompt",
+      "Proxy model requests now use the native Tauri HTTP client",
+      "Added inertial pet dragging with screen boundary protection"
+    ]
+  }
+}

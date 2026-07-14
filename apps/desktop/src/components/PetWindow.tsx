@@ -2,6 +2,7 @@ import { Check, EyeOff, MessageCircle, MoreHorizontal, PanelBottomClose, Send, S
 import { useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import type { ComputerTaskPhase } from "./ComputerTaskPanel";
 import type { ComputerTaskPlan } from "../computer/ComputerTask";
+import type { MotionFps } from "../config/schema";
 import type { Translations } from "../i18n";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
 import { PetRenderer } from "../pet/PetRenderer";
@@ -25,6 +26,7 @@ type PetWindowProps = {
   computerLabels: Translations["computer"];
   labels: Translations["pet"];
   petSize: number;
+  motionFps: MotionFps;
   petDisplayName?: string;
   busy: boolean;
   toolbarHidden: boolean;
@@ -75,6 +77,7 @@ export function PetWindow({
   computerLabels,
   labels,
   petSize,
+  motionFps,
   petDisplayName,
   busy,
   toolbarHidden,
@@ -124,6 +127,7 @@ export function PetWindow({
 
     const result = await dragWindowWithPointer(petSize, {
       activationDistance: 2,
+      motionFps,
       startEdge,
       onActivated: () => {
         if (dragStartedRef.current) return;
@@ -135,7 +139,7 @@ export function PetWindow({
     }).catch(() => ({ activated: false, edge: null }));
 
     writeAppLog("PetWindow:trackDrag:result", result);
-    if (result.activated) {
+    if (dragStartedRef.current) {
       updateTuckedEdge(result.edge);
       onDragEnd();
     } else {
