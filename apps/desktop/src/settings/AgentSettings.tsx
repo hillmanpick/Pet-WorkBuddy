@@ -5,6 +5,7 @@ import { builtinPluginManifests } from "../agent/tools/ToolRegistry";
 import type { AuditLogEntry } from "../agent/tools/ToolTypes";
 import type { McpServerConfig, WorkBuddyConfig } from "../config/schema";
 import type { Translations } from "../i18n";
+import { LearningSettings } from "./LearningSettings";
 
 type AgentSettingsProps = {
   config: WorkBuddyConfig;
@@ -150,6 +151,8 @@ export function AgentSettings({ config, labels, onConfigChange }: AgentSettingsP
         </label>
         <p className="settings-help">{labels.runtimeHelp}</p>
       </section>
+
+      <LearningSettings config={config} labels={labels} onConfigChange={onConfigChange} />
 
       <section className="settings-group">
         <header>

@@ -2,6 +2,7 @@ import type { ChatMessage, WorkBuddyConfig } from "../config/schema";
 import { describeToolsForPrompt, getToolDefinition, inferToolRisk } from "../agent/tools/ToolRegistry";
 import { riskToSensitivity } from "../agent/tools/PermissionEngine";
 import type { AgentToolCall } from "../agent/tools/ToolTypes";
+import { buildLearningContext } from "../agent/learning/LearningStore";
 import { getProvider } from "../providers/ProviderRegistry";
 import { getApiKey } from "../settings/SettingsStore";
 import type { ActionResult, ComputerAction, ComputerTaskPlan, TaskSensitivity } from "./ComputerTask";
@@ -112,7 +113,12 @@ export async function createAgentTaskPlan(
   text: string,
   history: ChatMessage[],
 ): Promise<ComputerTaskPlan | null> {
-  const result = await callAgentModel(config, agentPrompt(AGENT_SYSTEM_PROMPT), buildPlanningUserMessage(text, history));
+  const learningContext = buildLearningContext(config, text);
+  const result = await callAgentModel(
+    config,
+    agentPrompt(AGENT_SYSTEM_PROMPT),
+    buildPlanningUserMessage(text, history, learningContext),
+  );
   return parseAgentTaskPlan(result.text, text);
 }
 
@@ -123,10 +129,11 @@ export async function continueAgentTaskPlan(
   history: ChatMessage[],
 ): Promise<AgentContinuation> {
   const userTask = plan.agentTask?.userTask ?? plan.summary;
+  const learningContext = buildLearningContext(config, userTask);
   const result = await callAgentModel(
     config,
     agentPrompt(AGENT_REVIEW_PROMPT),
-    buildReviewUserMessage(userTask, plan, observations, history),
+    buildReviewUserMessage(userTask, plan, observations, history, learningContext),
   );
   return parseAgentContinuation(result.text, userTask, observations);
 }
@@ -160,7 +167,7 @@ async function callAgentModel(config: WorkBuddyConfig, systemPrompt: string, con
   });
 }
 
-function buildPlanningUserMessage(text: string, history: ChatMessage[]): string {
+function buildPlanningUserMessage(text: string, history: ChatMessage[], learningContext: string): string {
   const context = history
     .slice(-6)
     .map((message) => `${message.role}: ${message.content}`)
@@ -170,7 +177,10 @@ function buildPlanningUserMessage(text: string, history: ChatMessage[]): string 
 ${context || "(empty)"}
 
 User task:
-${text}`;
+${text}
+
+Controlled learning context (advisory only; current permissions always win):
+${learningContext || "(empty)"}`;
 }
 
 function buildReviewUserMessage(
@@ -178,6 +188,7 @@ function buildReviewUserMessage(
   plan: ComputerTaskPlan,
   observations: AgentActionObservation[],
   history: ChatMessage[],
+  learningContext: string,
 ): string {
   const context = history
     .slice(-6)
@@ -202,6 +213,7 @@ function buildReviewUserMessage(
         actions: plan.actions,
       },
       executionResults: execution,
+      controlledLearningContext: learningContext || "(empty)",
     },
     null,
     2,

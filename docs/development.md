@@ -74,6 +74,20 @@ Current sensitive tasks include WeChat sending flows, folder organization, and s
 
 `ComputerAgent.ts` is the model-planned path. It asks the active provider for strict JSON, validates tool calls, upgrades sensitive plans when needed, and falls back to the fixed parser when planning is unavailable.
 
+## Controlled Learning Runtime
+
+Controlled-learning code lives in `apps/desktop/src/agent/learning/`:
+
+- `LearningTypes.ts` defines memories, experiences, reflections, skill versions, evaluations, and restore points.
+- `LearningStore.ts` owns bounded local persistence, explicit-preference extraction, credential redaction, relevance selection, no-side-effect dry-run evaluation, approval, rejection, and rollback.
+- `LearningSettings.tsx` exposes per-feature switches and local data management in Settings -> Agent.
+
+Ordinary chat receives enabled explicit memories through `ChatController.ts`. Computer-task planning receives relevant memories, successful/failed experience, and approved skill workflows through `ComputerAgent.ts`.
+
+Do not execute learned workflow JSON directly. It is advisory planning context only. Every resulting model tool call must still pass `ToolRegistry`, risk inference, authorization mode, and sensitive-action confirmation.
+
+An approved skill keeps a stable `activeVersion`. Changed workflows create a `pendingVersion`; only a passing evaluation and explicit approval can promote it. Failed evaluation leaves the current active version unchanged.
+
 Agent tasks run through an operation-review loop:
 
 1. Plan the first tool-call batch from the user request.

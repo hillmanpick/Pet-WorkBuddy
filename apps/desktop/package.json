@@ -1,6 +1,6 @@
 {
   "name": "@workbuddy/desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "Open-source AI desktop pet with configurable model providers and custom pet packs.",
   "author": "hillmanpick",

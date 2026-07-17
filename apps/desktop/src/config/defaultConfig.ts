@@ -85,6 +85,15 @@ export const defaultConfig: WorkBuddyConfig = {
     enabled: true,
     maxIterations: 3,
     mcpServers: {},
+    selfImprovement: {
+      enabled: true,
+      longTermMemory: true,
+      experienceLibrary: true,
+      reflection: true,
+      skillGeneration: true,
+      autoEvaluation: true,
+      autoLearnPreferences: true,
+    },
   },
   computerControl: {
     enabled: true,
@@ -128,6 +137,10 @@ export function mergeConfig(value: Partial<WorkBuddyConfig> | null): WorkBuddyCo
       mcpServers: {
         ...defaultConfig.agent.mcpServers,
         ...value.agent?.mcpServers,
+      },
+      selfImprovement: {
+        ...defaultConfig.agent.selfImprovement,
+        ...value.agent?.selfImprovement,
       },
     },
     computerControl: {

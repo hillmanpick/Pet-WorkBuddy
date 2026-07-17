@@ -61,6 +61,8 @@ import {
   setApiKey,
 } from "../settings/SettingsStore";
 import { checkForUpdatesOnStartup } from "../updates/UpdateService";
+import { captureExplicitPreference, recordLearningTask } from "../agent/learning/LearningStore";
+import type { LearningOutcome } from "../agent/learning/LearningTypes";
 
 type Panel = "none" | "chat" | "settings";
 const CONFIG_CHANNEL = "workbuddy.config";
@@ -160,6 +162,41 @@ function actionObservations(
     const action = actions[result.index] ?? actions[0];
     return action ? [{ iteration, action, result }] : [];
   });
+}
+
+type LearningExecution = {
+  action: ComputerAction;
+  result: Pick<ActionResult, "ok" | "message">;
+};
+
+function recordControlledLearning(
+  config: WorkBuddyConfig,
+  plan: ComputerTaskPlan,
+  outcome: LearningOutcome,
+  executions: LearningExecution[],
+  conclusion?: string,
+): void {
+  const userTask = plan.learningTask?.userTask ?? plan.agentTask?.userTask;
+  if (!userTask) return;
+
+  try {
+    recordLearningTask(config, {
+      taskId: plan.id,
+      userTask,
+      title: plan.title,
+      summary: plan.summary,
+      outcome,
+      actions: executions.map((item) => item.action),
+      observations: executions.map((item) => item.result),
+      conclusion,
+    });
+  } catch (error) {
+    console.warn("Failed to persist controlled learning data", error);
+  }
+}
+
+function learningExecutionsFromAgent(observations: AgentActionObservation[]): LearningExecution[] {
+  return observations.map((item) => ({ action: item.action, result: item.result }));
 }
 
 function publishConfig(config: WorkBuddyConfig) {
@@ -446,6 +483,7 @@ function PetApp() {
         setStatus("Ready");
         appendAssistantMessage(`${labels.computer.reminderSet}: ${message}`);
         triggerPet("onAiReplyEnd", labels.computer.reminderSet, 5200);
+        recordControlledLearning(config, plan, "success", [], `${labels.computer.reminderSet}: ${message}`);
         setBusy(false);
         return;
       }
@@ -454,6 +492,7 @@ function PetApp() {
       if (!actions.length) {
         setComputerTask(null);
         appendAssistantMessage(labels.computer.done);
+        recordControlledLearning(config, plan, "success", [], labels.computer.done);
         return;
       }
 
@@ -461,8 +500,13 @@ function PetApp() {
       setStatus("Running task");
       triggerPet("onUserSendMessage", labels.computer.running);
 
+      let learningExecutions: LearningExecution[] = [];
       try {
         const results = await executeComputerActions(actions, plan.id);
+        learningExecutions = actions.flatMap((action, index) => {
+          const result = results.find((item) => item.index === index);
+          return result ? [{ action, result }] : [];
+        });
 
         if (isAgentTaskPlan(plan) && phase === "prepare") {
           let currentPlan = plan;
@@ -482,6 +526,13 @@ function PetApp() {
               setStatus("Task needs review");
               appendAssistantMessage(`${labels.computer.notVerified}: ${message}`);
               triggerPet("onError", labels.computer.notVerified, 9000);
+              recordControlledLearning(
+                config,
+                plan,
+                "needs_user",
+                learningExecutionsFromAgent(observations),
+                message,
+              );
               return;
             }
 
@@ -490,6 +541,13 @@ function PetApp() {
               setStatus("Ready");
               appendAssistantMessage(`${labels.computer.done}: ${review.message}`);
               triggerPet("onAiReplyEnd", review.message, 6200);
+              recordControlledLearning(
+                config,
+                plan,
+                "success",
+                learningExecutionsFromAgent(observations),
+                review.message,
+              );
               return;
             }
 
@@ -498,6 +556,13 @@ function PetApp() {
               setStatus("Task error");
               appendAssistantMessage(`${labels.computer.failed}: ${review.message}`);
               triggerPet("onError", review.message, 9000);
+              recordControlledLearning(
+                config,
+                plan,
+                "failed",
+                learningExecutionsFromAgent(observations),
+                review.message,
+              );
               return;
             }
 
@@ -506,6 +571,13 @@ function PetApp() {
               setStatus("Needs user");
               appendAssistantMessage(`${labels.computer.needsUser}: ${review.message}`);
               triggerPet("onAiReplyEnd", review.message, 9000);
+              recordControlledLearning(
+                config,
+                plan,
+                "needs_user",
+                learningExecutionsFromAgent(observations),
+                review.message,
+              );
               return;
             }
 
@@ -514,6 +586,13 @@ function PetApp() {
               setStatus("Ready");
               appendAssistantMessage(labels.computer.sensitiveDenied);
               triggerPet("onError", labels.computer.sensitiveDenied, 7000);
+              recordControlledLearning(
+                config,
+                plan,
+                "cancelled",
+                learningExecutionsFromAgent(observations),
+                labels.computer.sensitiveDenied,
+              );
               return;
             }
 
@@ -530,6 +609,13 @@ function PetApp() {
               setStatus("Needs user");
               appendAssistantMessage(labels.computer.iterationLimit);
               triggerPet("onAiReplyEnd", labels.computer.iterationLimit, 9000);
+              recordControlledLearning(
+                config,
+                plan,
+                "failed",
+                learningExecutionsFromAgent(observations),
+                labels.computer.iterationLimit,
+              );
               return;
             }
 
@@ -547,6 +633,13 @@ function PetApp() {
           setStatus("Needs user");
           appendAssistantMessage(labels.computer.iterationLimit);
           triggerPet("onAiReplyEnd", labels.computer.iterationLimit, 9000);
+          recordControlledLearning(
+            config,
+            plan,
+            "failed",
+            learningExecutionsFromAgent(observations),
+            labels.computer.iterationLimit,
+          );
           return;
         }
 
@@ -558,18 +651,28 @@ function PetApp() {
             setStatus("Ready");
             appendAssistantMessage(labels.computer.manualSend);
             triggerPet("onAiReplyEnd", labels.computer.manualSend, 9000);
+            recordControlledLearning(config, plan, "needs_user", learningExecutions, labels.computer.manualSend);
           } else if (shouldBlockComputerPhase(config, plan, "final")) {
             setComputerTask(null);
             setStatus("Ready");
             appendAssistantMessage(labels.computer.sensitiveDenied);
             triggerPet("onError", labels.computer.sensitiveDenied, 7000);
+            recordControlledLearning(config, plan, "cancelled", learningExecutions, labels.computer.sensitiveDenied);
           } else if (shouldAutoRunComputerPhase(config, plan, "final")) {
             const finalResults = await executeComputerActions(plan.finalActions, plan.id);
+            learningExecutions = [
+              ...learningExecutions,
+              ...plan.finalActions.flatMap((action, index) => {
+                const result = finalResults.find((item) => item.index === index);
+                return result ? [{ action, result }] : [];
+              }),
+            ];
             assertComputerActionsSucceeded(finalResults);
             setComputerTask(null);
             setStatus("Ready");
             appendAssistantMessage(`${labels.computer.done}: ${plan.summary}`);
             triggerPet("onAiReplyEnd", labels.computer.done, 5200);
+            recordControlledLearning(config, plan, "success", learningExecutions, plan.summary);
           } else {
             setComputerTask({ plan, phase: "final" });
             setStatus("Waiting for final confirmation");
@@ -584,6 +687,7 @@ function PetApp() {
           setStatus("Needs user check");
           appendAssistantMessage(`${labels.computer.notVerified}: ${plan.summary}`);
           triggerPet("onAiReplyEnd", labels.computer.notVerified, 7000);
+          recordControlledLearning(config, plan, "needs_user", learningExecutions, labels.computer.notVerified);
           return;
         }
 
@@ -591,11 +695,13 @@ function PetApp() {
         setStatus("Ready");
         appendAssistantMessage(`${labels.computer.done}: ${plan.summary}`);
         triggerPet("onAiReplyEnd", labels.computer.done, 5200);
+        recordControlledLearning(config, plan, "success", learningExecutions, plan.summary);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setStatus("Task error");
         appendAssistantMessage(`${labels.computer.failed}: ${message}`);
         triggerPet("onError", message, 8000);
+        recordControlledLearning(config, plan, "failed", learningExecutions, message);
       } finally {
         setBusy(false);
       }
@@ -633,6 +739,11 @@ function PetApp() {
       const nextMessages = [...messages, userMessage];
       setMessages(nextMessages);
       saveChatHistory(nextMessages);
+      try {
+        captureExplicitPreference(config, text);
+      } catch (error) {
+        console.warn("Failed to persist an explicit preference", error);
+      }
 
       let taskPlan: ComputerTaskPlan | null = null;
       let agentPlanningError: string | null = null;
@@ -651,6 +762,7 @@ function PetApp() {
 
       taskPlan = taskPlan ?? createComputerTaskPlan(text, config.appearance.language);
       if (taskPlan) {
+        taskPlan = { ...taskPlan, learningTask: { userTask: text } };
         if (!config.computerControl.enabled) {
           const assistantMessage = createMessage("assistant", labels.computer.disabled);
           const finalMessages = [...nextMessages, assistantMessage];
@@ -753,7 +865,10 @@ function PetApp() {
     setComputerTask(null);
     setStatus("Ready");
     triggerPet("onClick", labels.computer.cancelled, 3200);
-  }, [labels.computer.cancelled, triggerPet]);
+    if (computerTask) {
+      recordControlledLearning(config, computerTask.plan, "cancelled", [], labels.computer.cancelled);
+    }
+  }, [computerTask, config, labels.computer.cancelled, triggerPet]);
 
   const runQuickCommand = useCallback(
     (command: QuickCommand) => {

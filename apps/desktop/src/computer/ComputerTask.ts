@@ -29,6 +29,10 @@ export type AgentTaskState = {
   userTask: string;
 };
 
+export type LearningTaskState = {
+  userTask: string;
+};
+
 export type ComputerTaskPlan = {
   id: string;
   title: string;
@@ -38,6 +42,7 @@ export type ComputerTaskPlan = {
   actions: ComputerAction[];
   completionMode?: "verified" | "needs_user_check";
   agentTask?: AgentTaskState;
+  learningTask?: LearningTaskState;
   localTask?: LocalTask;
   finalTitle?: string;
   finalSummary?: string;

@@ -2,6 +2,7 @@ import type { ChatAttachment, ChatMessage, WorkBuddyConfig } from "../config/sch
 import { isSupportedImageMimeType, shouldSendVisionInput } from "../providers/ProviderCapabilities";
 import { getProvider } from "../providers/ProviderRegistry";
 import { getApiKey } from "../settings/SettingsStore";
+import { buildConversationMemoryContext } from "../agent/learning/LearningStore";
 
 export function createMessage(
   role: ChatMessage["role"],
@@ -28,9 +29,15 @@ export async function requestAssistantReply(
 
   const provider = getProvider(config.activeProvider);
   const apiKey = await getApiKey(config.activeProvider);
+  const memoryContext = buildConversationMemoryContext(config);
   const result = await provider.chat({
     providerId: config.activeProvider,
-    config: providerConfig,
+    config: memoryContext
+      ? {
+          ...providerConfig,
+          systemPrompt: `${providerConfig.systemPrompt}\n\nControlled user memory:\n${memoryContext}`,
+        }
+      : providerConfig,
     apiKey,
     messages,
     signal,

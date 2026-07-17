@@ -44,10 +44,21 @@ export type McpServerConfig = {
   env: Record<string, string>;
 };
 
+export type SelfImprovementConfig = {
+  enabled: boolean;
+  longTermMemory: boolean;
+  experienceLibrary: boolean;
+  reflection: boolean;
+  skillGeneration: boolean;
+  autoEvaluation: boolean;
+  autoLearnPreferences: boolean;
+};
+
 export type AgentConfig = {
   enabled: boolean;
   maxIterations: number;
   mcpServers: Record<string, McpServerConfig>;
+  selfImprovement: SelfImprovementConfig;
 };
 
 export type WorkBuddyConfig = {

@@ -1,23 +1,23 @@
 {
   "product": "WorkBuddy",
   "platform": "windows-x86_64",
-  "version": "0.1.4",
-  "downloadUrl": "https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.4_x64-setup.exe",
-  "sha256": "700159366c7510657be522fe7c5b6f6db9604e7a73ce84cf777ef62b126a682a",
-  "size": 2886670,
-  "publishedAt": "2026-07-14T10:27:21Z",
+  "version": "0.1.5",
+  "downloadUrl": "https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.5_x64-setup.exe",
+  "sha256": "69d2076929fcc7355547972f68e9fff6599e018a55773767adfe4976464e5bac",
+  "size": 2893534,
+  "publishedAt": "2026-07-17T08:21:20Z",
   "notes": {
     "zh": [
-      "新增 30、60、90、120 FPS 宠物动画帧率选项，默认使用 90 FPS",
-      "串行处理鼠标穿透状态，减少原生窗口状态竞争",
-      "增加拖动结束冷却时间，改善屏幕边缘收起和拖出时的稳定性",
-      "补充原生崩溃诊断日志"
+      "新增受控长期记忆，可学习明确偏好和常用应用",
+      "新增任务经验库、失败反思和相关经验复用",
+      "新增声明式技能候选、安全评测、用户批准和版本管理",
+      "新增学习数据日志、恢复点和一键回滚"
     ],
     "en": [
-      "Added selectable 30, 60, 90, and 120 FPS pet motion with 90 FPS as the default",
-      "Serialized mouse-passthrough updates to prevent native window state races",
-      "Added a post-drag cooldown for more reliable edge tuck and pull-out behavior",
-      "Improved native crash diagnostics"
+      "Added controlled long-term memory for explicit preferences and commonly used apps",
+      "Added task experience, failure reflection, and relevant experience reuse",
+      "Added declarative skill candidates with safety evaluation, user approval, and versioning",
+      "Added learning change history, restore points, and rollback"
     ]
   }
 }
