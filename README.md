@@ -21,6 +21,7 @@ WorkBuddy 是一个开源 AI 桌面宠物项目。它不是网页版，也不是
 
 | Version | Windows x64 installer | Release |
 | --- | --- | --- |
+| `v0.1.6` | [WorkBuddy_0.1.6_x64-setup.exe](https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.6_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.6) |
 | `v0.1.5` | [WorkBuddy_0.1.5_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.5/WorkBuddy_0.1.5_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.5) |
 | `v0.1.4` | [WorkBuddy_0.1.4_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.4/WorkBuddy_0.1.4_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.4) |
 | `v0.1.3` | [WorkBuddy_0.1.3_x64-setup.exe](https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.3_x64-setup.exe) | Startup update checks included |
@@ -62,7 +63,7 @@ WorkBuddy 的目标是做一个开源的 AI 桌面伙伴：它保留桌宠的陪
 - 自定义外观：宠物名称、宠物大小、聊天框颜色、中英文 UI。
 - 快捷键和快捷指令：可以配置全局快捷键，也可以添加自己的常用指令。
 - 开机自启动：可在设置中打开或关闭，不需要管理员权限。
-- 启动更新检查：每次启动异步检查最新版本，发现更新后由用户确认是否打开安装包下载页面。
+- 手动更新：用户可从下载链接获取新版安装包，退出旧版后覆盖安装。
 - 聊天记录：本地保存，可在设置里按日期查看，带时间戳。
 - 本地 Agent：内置 filesystem、terminal、browser、app、screen、clipboard、office、confirm 等工具。
 - 权限控制：高风险操作需要确认，并记录本地执行日志。
@@ -547,7 +548,7 @@ Users bring their own API keys, configure model providers locally, chat with the
 - Custom pet name, pet size, chat color, Chinese/English UI.
 - Global shortcuts and custom quick commands.
 - Launch-on-startup toggle.
-- Startup update checks with a user-confirmed installer download prompt.
+- Manual installer updates from the download links.
 - Local chat history grouped by date with timestamps.
 - Codex-style local Agent runtime with tool plugins, risk levels, confirmations, and audit logs.
 - Controlled self-improvement with explicit preferences, task experience, failure reflection, evaluated skill candidates, and rollback restore points.

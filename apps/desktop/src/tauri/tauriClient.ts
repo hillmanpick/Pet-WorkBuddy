@@ -159,13 +159,16 @@ export async function openSettingsWindow(): Promise<void> {
   if (!isTauriRuntime()) return;
 
   if (settingsWindowOpenPromise) {
+    writeAppLog("openSettingsWindow:reusePending");
     return settingsWindowOpenPromise;
   }
 
   settingsWindowOpenPromise = (async () => {
+    writeAppLog("openSettingsWindow:start");
     const { WebviewWindow, getAll } = await import("@tauri-apps/api/window");
     const existing = getAll().find((item) => item.label === "settings");
     if (existing) {
+      writeAppLog("openSettingsWindow:focusExisting");
       await existing.show();
       await existing.setFocus();
       return;
@@ -191,14 +194,15 @@ export async function openSettingsWindow(): Promise<void> {
 
     await new Promise<void>((resolve) => {
       let settled = false;
-      const finish = () => {
+      const finish = (state = "timeout") => {
         if (settled) return;
         settled = true;
+        writeAppLog("openSettingsWindow:finish", { state });
         resolve();
       };
 
-      void settingsWindow.once("tauri://created", finish);
-      void settingsWindow.once("tauri://error", finish);
+      void settingsWindow.once("tauri://created", () => finish("created"));
+      void settingsWindow.once("tauri://error", () => finish("error"));
       window.setTimeout(finish, 1200);
     });
   })().finally(() => {

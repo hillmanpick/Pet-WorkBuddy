@@ -60,7 +60,6 @@ import {
   saveConfig,
   setApiKey,
 } from "../settings/SettingsStore";
-import { checkForUpdatesOnStartup } from "../updates/UpdateService";
 import { captureExplicitPreference, recordLearningTask } from "../agent/learning/LearningStore";
 import type { LearningOutcome } from "../agent/learning/LearningTypes";
 
@@ -222,6 +221,17 @@ async function loadConfigWithStartupState(): Promise<WorkBuddyConfig> {
   } catch {
     return nextConfig;
   }
+}
+
+async function loadProviderApiKeys(config: WorkBuddyConfig): Promise<Partial<Record<ProviderId, string>>> {
+  const providerIds = Object.keys(config.providers) as ProviderId[];
+  const nextKeys: Partial<Record<ProviderId, string>> = {};
+  await Promise.all(
+    providerIds.map(async (providerId) => {
+      nextKeys[providerId] = await getApiKey(providerId);
+    }),
+  );
+  return nextKeys;
 }
 
 export function App() {
@@ -917,16 +927,8 @@ function PetApp() {
     void loadConfigWithStartupState().then(async (nextConfig) => {
       setConfig(nextConfig);
       setMessages(loadChatHistory());
-      const providerIds = Object.keys(nextConfig.providers) as ProviderId[];
-      const nextKeys: Partial<Record<ProviderId, string>> = {};
-      await Promise.all(
-        providerIds.map(async (providerId) => {
-          nextKeys[providerId] = await getApiKey(providerId);
-        }),
-      );
-      setApiKeys(nextKeys);
+      setApiKeys(await loadProviderApiKeys(nextConfig));
       loadedRef.current = true;
-      void checkForUpdatesOnStartup(nextConfig.appearance.language);
     });
   }, []);
 
@@ -1335,23 +1337,60 @@ function SettingsApp() {
   );
 
   useEffect(() => {
-    void loadConfigWithStartupState().then(async (nextConfig) => {
-      setConfig(nextConfig);
-      const providerIds = Object.keys(nextConfig.providers) as ProviderId[];
-      const nextKeys: Partial<Record<ProviderId, string>> = {};
-      await Promise.all(
-        providerIds.map(async (providerId) => {
-          nextKeys[providerId] = await getApiKey(providerId);
-        }),
-      );
-      setApiKeys(nextKeys);
-    });
-  }, []);
+    let disposed = false;
+    const timers: number[] = [];
 
-  useEffect(() => {
-    void loadPetCatalog()
-      .then(setPetCatalog)
-      .catch(() => setPetCatalog([]));
+    writeAppLog("SettingsApp:init:start");
+    void loadConfig()
+      .then((nextConfig) => {
+        if (disposed) return;
+        setConfig(nextConfig);
+        writeAppLog("SettingsApp:configLoaded");
+
+        timers.push(window.setTimeout(() => {
+          void loadProviderApiKeys(nextConfig)
+            .then((nextKeys) => {
+              if (!disposed) setApiKeys(nextKeys);
+              writeAppLog("SettingsApp:apiKeysLoaded");
+            })
+            .catch((error) => writeAppLog("SettingsApp:apiKeysFailed", { error: String(error) }));
+        }, 120));
+
+        timers.push(window.setTimeout(() => {
+          if (!isTauriRuntime()) return;
+          void getLaunchOnStartup()
+            .then((launchOnStartup) => {
+              if (disposed) return;
+              setConfig((current) => ({
+                ...current,
+                behavior: {
+                  ...current.behavior,
+                  launchOnStartup,
+                },
+              }));
+              writeAppLog("SettingsApp:startupStateLoaded", { launchOnStartup });
+            })
+            .catch((error) => writeAppLog("SettingsApp:startupStateFailed", { error: String(error) }));
+        }, 240));
+
+        timers.push(window.setTimeout(() => {
+          void loadPetCatalog()
+            .then((packs) => {
+              if (!disposed) setPetCatalog(packs);
+              writeAppLog("SettingsApp:petCatalogLoaded", { count: packs.length });
+            })
+            .catch((error) => {
+              if (!disposed) setPetCatalog([]);
+              writeAppLog("SettingsApp:petCatalogFailed", { error: String(error) });
+            });
+        }, 360));
+      })
+      .catch((error) => writeAppLog("SettingsApp:configFailed", { error: String(error) }));
+
+    return () => {
+      disposed = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
   }, []);
 
   async function handleApiKeyChange(provider: ProviderId, value: string) {

@@ -1,6 +1,6 @@
 [package]
 name = "workbuddy"
-version = "0.1.5"
+version = "0.1.6"
 description = "Open-source AI desktop pet"
 authors = ["hillmanpick"]
 license = "MIT"

@@ -1,23 +1,21 @@
 {
   "product": "WorkBuddy",
   "platform": "windows-x86_64",
-  "version": "0.1.5",
-  "downloadUrl": "https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.5_x64-setup.exe",
-  "sha256": "69d2076929fcc7355547972f68e9fff6599e018a55773767adfe4976464e5bac",
-  "size": 2893534,
-  "publishedAt": "2026-07-17T08:21:20Z",
+  "version": "0.1.6",
+  "downloadUrl": "https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.6_x64-setup.exe",
+  "sha256": "c899f2a99d38e4ed2da9350c654ccef1a0804e099b3a32c9b77a5b589bded5b1",
+  "size": 2891310,
+  "publishedAt": "2026-07-17T10:01:45Z",
   "notes": {
     "zh": [
-      "新增受控长期记忆，可学习明确偏好和常用应用",
-      "新增任务经验库、失败反思和相关经验复用",
-      "新增声明式技能候选、安全评测、用户批准和版本管理",
-      "新增学习数据日志、恢复点和一键回滚"
+      "移除启动时的系统更新弹窗，避免窗口不可移动打断使用",
+      "优化设置窗口初始化，先显示界面再后台读取 API Key、开机自启动状态和宠物目录",
+      "增加设置窗口打开日志，方便定位后续卡顿原因"
     ],
     "en": [
-      "Added controlled long-term memory for explicit preferences and commonly used apps",
-      "Added task experience, failure reflection, and relevant experience reuse",
-      "Added declarative skill candidates with safety evaluation, user approval, and versioning",
-      "Added learning change history, restore points, and rollback"
+      "Removed the startup system update prompt so it no longer blocks interaction",
+      "Optimized settings startup by rendering first and loading API keys, startup state, and pet catalog in the background",
+      "Added settings-window diagnostics to help trace any remaining freezes"
     ]
   }
 }
