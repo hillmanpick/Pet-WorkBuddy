@@ -16,7 +16,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { LoadedPetPack } from "./PetPackLoader";
 import { resolvePetAsset } from "./PetPackLoader";
 import { PetActionPlayer } from "./PetActionPlayer";
-import { getGlobalCursorPosition, getWindowFrame, isTauriRuntime } from "../tauri/tauriClient";
+import { getPointerFrame, isTauriRuntime } from "../tauri/tauriClient";
 
 type PetRendererProps = {
   pack: LoadedPetPack | null;
@@ -191,22 +191,22 @@ function GltfPetRenderer({
       globalPointerTimer = window.setInterval(() => {
         if (globalPointerInFlight || disposed || !followPointerRef.current) return;
         globalPointerInFlight = true;
-        void Promise.all([getGlobalCursorPosition(), getWindowFrame()])
-          .then(([cursor, frame]) => {
-            if (!cursor || !frame || disposed) return;
+        void getPointerFrame()
+          .then((frame) => {
+            if (!frame || disposed) return;
             const rect = containerElement.getBoundingClientRect();
-            const scale = frame.scaleFactor || window.devicePixelRatio || 1;
+            const scale = frame.scaleFactor;
             const centerX = frame.x + (rect.left + rect.width / 2) * scale;
             const centerY = frame.y + (rect.top + rect.height / 2) * scale;
             setPointerTarget(
-              (cursor.x - centerX) / Math.max(rect.width * scale * 0.72, 1),
-              (cursor.y - centerY) / Math.max(rect.height * scale * 0.72, 1),
+              (frame.pointerX - centerX) / Math.max(rect.width * scale * 0.72, 1),
+              (frame.pointerY - centerY) / Math.max(rect.height * scale * 0.72, 1),
             );
           })
           .finally(() => {
             globalPointerInFlight = false;
           });
-      }, 40);
+      }, 80);
     }
 
     renderer.setAnimationLoop(() => {

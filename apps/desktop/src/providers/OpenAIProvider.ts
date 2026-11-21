@@ -1,7 +1,7 @@
 import type { AiProvider, AiProviderInput, ChatResponse } from "./AiProvider";
 import { assertApiKey, textWithAttachments } from "./AiProvider";
 import type { ChatAttachment, ChatMessage, ProviderId } from "../config/schema";
-import { isSupportedImageMimeType, shouldSendVisionInput } from "./ProviderCapabilities";
+import { isSupportedImageMimeType, shouldSendVisionInput, supportsReasoningEffort } from "./ProviderCapabilities";
 import { parseProviderJson, postProviderJson, resolveOpenAIEndpoint } from "./ProviderHttp";
 
 type OpenAIMessageContent =
@@ -42,6 +42,9 @@ export class OpenAIProvider implements AiProvider {
           messages,
           temperature: input.config.temperature,
           max_tokens: input.config.maxTokens,
+          ...(input.providerId === "openai" && supportsReasoningEffort(input.config.modelId)
+            ? { reasoning_effort: input.config.reasoningEffort ?? "medium" }
+            : {}),
         },
         input.signal,
       );

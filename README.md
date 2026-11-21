@@ -21,6 +21,7 @@ WorkBuddy 是一个开源 AI 桌面宠物项目。它不是网页版，也不是
 
 | Version | Windows x64 installer | Release |
 | --- | --- | --- |
+| `v0.1.7` | [WorkBuddy_0.1.7_x64-setup.exe](https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.7_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.7) |
 | `v0.1.6` | [WorkBuddy_0.1.6_x64-setup.exe](https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.6_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.6) |
 | `v0.1.5` | [WorkBuddy_0.1.5_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.5/WorkBuddy_0.1.5_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.5) |
 | `v0.1.4` | [WorkBuddy_0.1.4_x64-setup.exe](https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.4/WorkBuddy_0.1.4_x64-setup.exe) | [Release notes](https://github.com/hillmanpick/Pet-WorkBuddy/releases/tag/v0.1.4) |
@@ -57,7 +58,12 @@ WorkBuddy 的目标是做一个开源的 AI 桌面伙伴：它保留桌宠的陪
 - 平滑移动：支持 30、60、90、120 FPS 四档移动帧率，默认使用稳定性和流畅度更均衡的 90 FPS。
 - 桌宠交互：点击宠物会触发随机动作和台词，长时间不互动会自动在屏幕内移动。
 - 视觉跟随：宠物会轻微朝向鼠标，移动更有“活着”的感觉。
-- 轻量聊天：宠物下方是输入框，AI 回复显示在宠物正上方气泡里。
+- 聊天会话：可创建独立会话、查看和切换历史记录。
+- 放大聊天：宠物、历史会话列表与当前聊天并排显示；回答内容支持选中和复制，也可缩回轻量聊天框。
+- 自选模型：可刷新服务商模型列表并自行选择模型，支持的模型可调整推理强度。
+- 会话分组：每轮对话独立保存，可新建并切换历史会话。
+- 展开聊天：聊天记录与会话列表并排显示，桌宠继续显示在左侧；回答支持选择和复制。
+- 模型选择：聊天中可切换已启用服务商的模型，并调整支持模型的推理强度。
 - Markdown 友好显示：聊天内容会渲染粗体、列表和代码块，桌宠气泡不会直接显示 `**`、`###` 之类的原始 Markdown。
 - 上传图片和文件：支持点击上传、拖拽文件、粘贴图片或文件到聊天框。
 - 自定义外观：宠物名称、宠物大小、聊天框颜色、中英文 UI。

@@ -23,7 +23,14 @@ import {
 } from "../computer/ComputerTask";
 import { translations } from "../i18n";
 import { createMessage, requestAssistantReply } from "../chat/ChatController";
-import { loadChatHistory, saveChatHistory } from "../chat/ChatStore";
+import {
+  createChatConversation,
+  loadChatConversations,
+  loadChatHistory,
+  loadChatState,
+  saveChatHistory,
+  setActiveChatConversation,
+} from "../chat/ChatStore";
 import { bubbleTextFromMarkdown } from "../chat/MarkdownDisplay";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
 import { loadPetCatalog, loadPetPackById } from "../pet/PetPackLoader";
@@ -32,8 +39,7 @@ import type { PetEvent } from "../pet/PetStateMachine";
 import {
   centerAppWindow,
   closeCurrentWindow,
-  getGlobalCursorPosition,
-  getWindowFrame,
+  getPointerFrame,
   getLaunchOnStartup,
   hideAppWindow,
   isForegroundFullscreenApp,
@@ -235,6 +241,31 @@ async function loadProviderApiKeys(config: WorkBuddyConfig): Promise<Partial<Rec
 }
 
 export function App() {
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      writeAppLog("window:error", {
+        message: event.message,
+        filename: event.filename,
+        line: event.lineno,
+        column: event.colno,
+        stack: event.error instanceof Error ? event.error.stack : undefined,
+      });
+    };
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      writeAppLog("window:unhandledRejection", {
+        reason: reason instanceof Error ? reason.stack ?? reason.message : String(reason),
+      });
+    };
+
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    };
+  }, []);
+
   if (new URLSearchParams(window.location.search).get("view") === "settings") {
     return <SettingsApp />;
   }
@@ -243,9 +274,12 @@ export function App() {
 }
 
 function PetApp() {
+  const [initialChatState] = useState(() => loadChatState());
   const [config, setConfig] = useState<WorkBuddyConfig>(defaultConfig);
   const [apiKeys, setApiKeys] = useState<Partial<Record<ProviderId, string>>>({});
-  const [messages, setMessages] = useState<ChatMessage[]>(() => loadChatHistory());
+  const [conversations, setConversations] = useState(initialChatState.conversations);
+  const [activeConversationId, setActiveConversationId] = useState(initialChatState.activeConversationId);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialChatState.messages);
   const [petPack, setPetPack] = useState<LoadedPetPack | null>(null);
   const [petCatalog, setPetCatalog] = useState<LoadedPetPack[]>([]);
   const [petAction, setPetAction] = useState("idle");
@@ -255,6 +289,7 @@ function PetApp() {
     translations[defaultConfig.appearance.language].pet.greeting,
   );
   const [panel, setPanel] = useState<Panel>("none");
+  const [chatExpanded, setChatExpanded] = useState(false);
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const [tuckedEdge, setTuckedEdge] = useState<ScreenEdge | null>(null);
   const [toolbarActivityToken, setToolbarActivityToken] = useState(0);
@@ -277,6 +312,7 @@ function PetApp() {
   const hiddenByUserRef = useRef(false);
   const hiddenByDoNotDisturbRef = useRef(false);
   const mousePassthroughRef = useRef(false);
+  const mousePassthroughUpdateInFlightRef = useRef(false);
   const mousePassthroughResumeAtRef = useRef(0);
   const labels = translations[config.appearance.language];
   const hasFloatingBubble = Boolean((bubble || computerTask) && !tuckedEdge);
@@ -312,13 +348,34 @@ function PetApp() {
     [config, updateConfig],
   );
 
+  const persistConversationMessages = useCallback((nextMessages: ChatMessage[]) => {
+    saveChatHistory(nextMessages, activeConversationId);
+    setConversations(loadChatConversations());
+  }, [activeConversationId]);
+
+  const startNewConversation = useCallback(() => {
+    if (busy) return;
+    const conversation = createChatConversation();
+    setConversations(loadChatConversations());
+    setActiveConversationId(conversation.id);
+    setMessages([]);
+    setFocusToken((value) => value + 1);
+  }, [busy]);
+
+  const selectConversation = useCallback((conversationId: string) => {
+    if (busy || conversationId === activeConversationId) return;
+    setActiveChatConversation(conversationId);
+    setActiveConversationId(conversationId);
+    setMessages(loadChatHistory(conversationId));
+  }, [activeConversationId, busy]);
+
   const appendAssistantMessage = useCallback((content: string) => {
     setMessages((current) => {
       const nextMessages = [...current, createMessage("assistant", content)];
-      saveChatHistory(nextMessages);
+      persistConversationMessages(nextMessages);
       return nextMessages;
     });
-  }, []);
+  }, [persistConversationMessages]);
 
   const clearActionTimer = useCallback(() => {
     if (actionTimerRef.current) {
@@ -445,6 +502,7 @@ function PetApp() {
   const toggleChat = useCallback(() => {
     if (panel === "chat") {
       setPanel("none");
+      setChatExpanded(false);
       return;
     }
     openChat();
@@ -748,7 +806,7 @@ function PetApp() {
       const userMessage = createMessage("user", text, attachments);
       const nextMessages = [...messages, userMessage];
       setMessages(nextMessages);
-      saveChatHistory(nextMessages);
+      persistConversationMessages(nextMessages);
       try {
         captureExplicitPreference(config, text);
       } catch (error) {
@@ -777,7 +835,7 @@ function PetApp() {
           const assistantMessage = createMessage("assistant", labels.computer.disabled);
           const finalMessages = [...nextMessages, assistantMessage];
           setMessages(finalMessages);
-          saveChatHistory(finalMessages);
+          persistConversationMessages(finalMessages);
           triggerPet("onError", labels.computer.disabled, 5200);
           return;
         }
@@ -786,7 +844,7 @@ function PetApp() {
           const assistantMessage = createMessage("assistant", labels.computer.sensitiveDenied);
           const finalMessages = [...nextMessages, assistantMessage];
           setMessages(finalMessages);
-          saveChatHistory(finalMessages);
+          persistConversationMessages(finalMessages);
           triggerPet("onError", labels.computer.sensitiveDenied, 7000);
           return;
         }
@@ -794,7 +852,7 @@ function PetApp() {
         const assistantMessage = createMessage("assistant", `${labels.computer.detected}: ${taskPlan.summary}`);
         const finalMessages = [...nextMessages, assistantMessage];
         setMessages(finalMessages);
-        saveChatHistory(finalMessages);
+        persistConversationMessages(finalMessages);
         setPanel("chat");
         markChatActivity();
         setFocusToken((value) => value + 1);
@@ -812,7 +870,7 @@ function PetApp() {
         const assistantMessage = createMessage("assistant", `${labels.computer.planningFailed}: ${agentPlanningError}`);
         const finalMessages = [...nextMessages, assistantMessage];
         setMessages(finalMessages);
-        saveChatHistory(finalMessages);
+        persistConversationMessages(finalMessages);
         triggerPet("onError", labels.computer.planningFailed, 7000);
         setStatus("Planning error");
         return;
@@ -827,7 +885,7 @@ function PetApp() {
         const assistantMessage = createMessage("assistant", reply || "(empty reply)");
         const finalMessages = [...nextMessages, assistantMessage];
         setMessages(finalMessages);
-        saveChatHistory(finalMessages);
+        persistConversationMessages(finalMessages);
         const bubbleReply = bubbleTextFromMarkdown(reply || labels.pet.done);
         triggerPet(
           "onAiReplyEnd",
@@ -840,7 +898,7 @@ function PetApp() {
         const assistantMessage = createMessage("assistant", `Error: ${message}`);
         const finalMessages = [...nextMessages, assistantMessage];
         setMessages(finalMessages);
-        saveChatHistory(finalMessages);
+        persistConversationMessages(finalMessages);
         triggerPet("onError", message || labels.pet.apiKeyNeeded, 7000);
         setStatus("Provider error");
       } finally {
@@ -861,6 +919,7 @@ function PetApp() {
       labels.pet.thinking,
       markChatActivity,
       messages,
+      persistConversationMessages,
       runComputerTask,
       triggerPet,
     ],
@@ -926,7 +985,10 @@ function PetApp() {
   useEffect(() => {
     void loadConfigWithStartupState().then(async (nextConfig) => {
       setConfig(nextConfig);
-      setMessages(loadChatHistory());
+      const chatState = loadChatState();
+      setConversations(chatState.conversations);
+      setActiveConversationId(chatState.activeConversationId);
+      setMessages(chatState.messages);
       setApiKeys(await loadProviderApiKeys(nextConfig));
       loadedRef.current = true;
     });
@@ -1014,8 +1076,8 @@ function PetApp() {
 
   useEffect(() => {
     const mode = panel === "chat" ? "chat" : "pet";
-    void setDesktopWindowMode(mode, config.appearance.petSize);
-  }, [config.appearance.petSize, panel]);
+    void setDesktopWindowMode(mode, config.appearance.petSize, hasFloatingBubble, panel === "chat" && chatExpanded);
+  }, [chatExpanded, config.appearance.petSize, hasFloatingBubble, panel]);
 
   useEffect(() => {
     if (!isTauriRuntime()) return undefined;
@@ -1029,6 +1091,7 @@ function PetApp() {
       ".chat-panel",
     ].join(",");
     let disposed = false;
+    let lastMousePassthroughTraceAt = 0;
 
     function pointHitsInteractiveElement(x: number, y: number) {
       return Array.from(document.querySelectorAll<HTMLElement>(interactiveSelectors)).some((element) => {
@@ -1049,7 +1112,14 @@ function PetApp() {
     }
 
     async function updateMousePassthrough() {
-      if (disposed || hiddenByDoNotDisturbRef.current) return;
+      if (disposed || mousePassthroughUpdateInFlightRef.current || hiddenByDoNotDisturbRef.current) return;
+      mousePassthroughUpdateInFlightRef.current = true;
+      const startedAt = Date.now();
+      const tracePoll = startedAt - lastMousePassthroughTraceAt >= 5000;
+      if (tracePoll) {
+        lastMousePassthroughTraceAt = startedAt;
+        writeAppLog("mousePassthrough:pollStart", { panel, tuckedEdge, petDragging });
+      }
 
       try {
         if (petDragging || Date.now() < mousePassthroughResumeAtRef.current) {
@@ -1060,12 +1130,12 @@ function PetApp() {
           return;
         }
 
-        const [pointer, frame] = await Promise.all([getGlobalCursorPosition(), getWindowFrame()]);
-        if (!pointer || !frame) return;
+        const frame = await getPointerFrame();
+        if (!frame) return;
 
-        const scale = frame.scaleFactor || window.devicePixelRatio || 1;
-        const localX = (pointer.x - frame.x) / scale;
-        const localY = (pointer.y - frame.y) / scale;
+        const scale = frame.scaleFactor;
+        const localX = (frame.pointerX - frame.x) / scale;
+        const localY = (frame.pointerY - frame.y) / scale;
         const shouldPassthrough = !pointHitsInteractiveElement(localX, localY);
 
         if (mousePassthroughRef.current !== shouldPassthrough) {
@@ -1077,12 +1147,17 @@ function PetApp() {
           mousePassthroughRef.current = false;
           void setWindowMousePassthrough(false);
         }
+      } finally {
+        if (tracePoll) {
+          writeAppLog("mousePassthrough:pollEnd", { durationMs: Date.now() - startedAt });
+        }
+        mousePassthroughUpdateInFlightRef.current = false;
       }
     }
 
     const timer = window.setInterval(() => {
       void updateMousePassthrough();
-    }, 55);
+    }, 100);
     void updateMousePassthrough();
 
     return () => {
@@ -1203,16 +1278,15 @@ function PetApp() {
     await deleteApiKey(provider);
   }
 
-  function handleSave() {
-    void saveConfig(config);
-    void registerConfiguredShortcuts(config);
+  async function handleSave() {
+    await saveConfig(config);
     setStatus("Saved");
     triggerPet("onClick", labels.pet.saved);
   }
 
   return (
     <main
-      className={`app-shell panel-${panel}${hasFloatingBubble ? " has-floating-bubble" : ""}`}
+      className={`app-shell panel-${panel}${hasFloatingBubble ? " has-floating-bubble" : ""}${panel === "chat" && chatExpanded ? " chat-expanded" : ""}`}
       style={
         {
           "--pet-size": `${config.appearance.petSize}px`,
@@ -1285,9 +1359,29 @@ function PetApp() {
       {panel === "chat" ? (
         <ChatWindow
           busy={busy}
+          activeProvider={config.activeProvider}
+          providerConfigs={config.providers}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          messages={messages}
+          expanded={chatExpanded}
           focusToken={focusToken}
           labels={labels.chat}
+          providerLabels={labels.providers}
           onActivity={markChatActivity}
+          onNewConversation={startNewConversation}
+          onSelectConversation={selectConversation}
+          onToggleExpanded={() => setChatExpanded((expanded) => !expanded)}
+          onProviderChange={(providerId) => updateConfig({ ...config, activeProvider: providerId })}
+          onReasoningEffortChange={(reasoningEffort) =>
+            updateConfig({
+              ...config,
+              providers: {
+                ...config.providers,
+                openai: { ...config.providers.openai, reasoningEffort },
+              },
+            })
+          }
           onSend={handleSend}
         />
       ) : null}
@@ -1403,10 +1497,9 @@ function SettingsApp() {
     await deleteApiKey(provider);
   }
 
-  function handleSave() {
-    void saveConfig(config);
+  async function handleSave() {
+    await saveConfig(config);
     publishConfig(config);
-    void registerConfiguredShortcuts(config);
   }
 
   return (

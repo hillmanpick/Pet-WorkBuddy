@@ -2,6 +2,7 @@ export type ProviderId = "openai" | "claude" | "deepseek";
 export type UiLanguage = "en" | "zh";
 export type ImageInputMode = "auto" | "enabled" | "disabled";
 export type MotionFps = 30 | 60 | 90 | 120;
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export type ProviderConfig = {
   enabled: boolean;
@@ -9,6 +10,7 @@ export type ProviderConfig = {
   baseUrl: string;
   apiKeyRef: string;
   modelId: string;
+  reasoningEffort?: ReasoningEffort;
   imageInputMode: ImageInputMode;
   temperature: number;
   maxTokens: number;

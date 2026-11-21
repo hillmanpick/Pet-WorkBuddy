@@ -1,21 +1,25 @@
 {
   "product": "WorkBuddy",
   "platform": "windows-x86_64",
-  "version": "0.1.6",
-  "downloadUrl": "https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.6_x64-setup.exe",
-  "sha256": "c899f2a99d38e4ed2da9350c654ccef1a0804e099b3a32c9b77a5b589bded5b1",
-  "size": 2891310,
-  "publishedAt": "2026-07-17T10:01:45Z",
+  "version": "0.1.7",
+  "downloadUrl": "https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.7_x64-setup.exe",
+  "sha256": "256bcf8eb64fbcaAA7a22ca6b1d4ec263c05b070be70cf5e1d6fa428a4a457e1",
+  "size": 2897192,
+  "publishedAt": "2026-11-21T02:33:09Z",
   "notes": {
     "zh": [
-      "移除启动时的系统更新弹窗，避免窗口不可移动打断使用",
-      "优化设置窗口初始化，先显示界面再后台读取 API Key、开机自启动状态和宠物目录",
-      "增加设置窗口打开日志，方便定位后续卡顿原因"
+      "聊天记录改为独立会话，可新建、查看并切换历史会话",
+      "新增放大聊天布局，显示桌宠、历史会话和当前消息；回答支持选中和复制",
+      "设置中可刷新并选择服务商提供的模型，聊天中可调整支持模型的推理强度",
+      "保存设置后提供成功或失败反馈",
+      "增加应用退出和前端异常诊断日志，并降低鼠标/窗口状态轮询频率"
     ],
     "en": [
-      "Removed the startup system update prompt so it no longer blocks interaction",
-      "Optimized settings startup by rendering first and loading API keys, startup state, and pet catalog in the background",
-      "Added settings-window diagnostics to help trace any remaining freezes"
+      "Chat history is organized into separate conversations that can be created, browsed, and selected",
+      "Expanded chat shows the pet, conversation history, and current messages; answers can be selected and copied",
+      "Refresh and choose provider models in settings, with reasoning-effort controls for supported models",
+      "Settings now report whether saving succeeded or failed",
+      "Added app-exit and frontend-error diagnostics, and reduced pointer/window polling frequency"
     ]
   }
 }

@@ -52,6 +52,29 @@ export async function postProviderJson(
   }
 }
 
+export async function getProviderJson(
+  endpoint: string,
+  headers: Record<string, string>,
+): Promise<ProviderHttpResponse> {
+  try {
+    if (isTauriRuntime()) {
+      const { fetch: tauriFetch, ResponseType } = await import("@tauri-apps/api/http");
+      const response = await tauriFetch<string>(endpoint, {
+        method: "GET",
+        headers,
+        responseType: ResponseType.Text,
+        timeout: 20,
+      });
+      return { ok: response.ok, status: response.status, text: response.data };
+    }
+
+    const response = await fetch(endpoint, { headers, signal: AbortSignal.timeout(20_000) });
+    return { ok: response.ok, status: response.status, text: await response.text() };
+  } catch (error) {
+    throw new Error(`Cannot connect to model catalog ${endpoint}: ${errorMessage(error)}`);
+  }
+}
+
 export function parseProviderJson<T>(response: ProviderHttpResponse): T {
   try {
     return JSON.parse(response.text) as T;

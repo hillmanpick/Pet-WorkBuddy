@@ -19,7 +19,7 @@ fn main() {
         return;
     }
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .system_tray(tray::build_tray())
         .on_system_tray_event(tray::handle_tray_event)
         .setup(|app| {
@@ -47,11 +47,31 @@ fn main() {
             window::center_app_window,
             window::get_cursor_position,
             window::get_pointer_state,
+            window::get_pointer_frame,
             window::set_mouse_passthrough,
             window::is_foreground_fullscreen_app
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run WorkBuddy");
+        .build(tauri::generate_context!())
+        .expect("failed to build WorkBuddy");
+
+    app.run(|_, event| match event {
+        tauri::RunEvent::ExitRequested { .. } => {
+            app_log::write_line("Tauri run event: ExitRequested");
+        }
+        tauri::RunEvent::Exit => {
+            app_log::write_line("Tauri run event: Exit");
+        }
+        tauri::RunEvent::WindowEvent { label, event, .. } => match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
+                app_log::write_line(&format!("Tauri window event: CloseRequested label={label}"));
+            }
+            tauri::WindowEvent::Destroyed => {
+                app_log::write_line(&format!("Tauri window event: Destroyed label={label}"));
+            }
+            _ => {}
+        },
+        _ => {}
+    });
 
     drop(instance_guard);
 }

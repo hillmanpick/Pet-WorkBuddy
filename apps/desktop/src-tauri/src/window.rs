@@ -14,6 +14,16 @@ pub struct PointerState {
     left_pressed: bool,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointerFrame {
+    x: i32,
+    y: i32,
+    window_x: i32,
+    window_y: i32,
+    scale_factor: f64,
+}
+
 fn keep_main_window_out_of_taskbar(window: &tauri::Window) -> Result<(), String> {
     window
         .set_skip_taskbar(true)
@@ -62,6 +72,20 @@ pub fn get_cursor_position() -> Result<CursorPosition, String> {
 #[tauri::command]
 pub fn get_pointer_state() -> Result<PointerState, String> {
     platform_pointer_state()
+}
+
+#[tauri::command]
+pub fn get_pointer_frame(window: tauri::Window) -> Result<PointerFrame, String> {
+    let cursor = platform_cursor_position()?;
+    let position = window.outer_position().map_err(|error| error.to_string())?;
+    let scale_factor = window.scale_factor().map_err(|error| error.to_string())?;
+    Ok(PointerFrame {
+        x: cursor.x,
+        y: cursor.y,
+        window_x: position.x,
+        window_y: position.y,
+        scale_factor,
+    })
 }
 
 #[tauri::command]

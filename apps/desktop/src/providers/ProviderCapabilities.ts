@@ -12,6 +12,10 @@ export function isSupportedImageMimeType(mimeType: string): boolean {
   return SUPPORTED_IMAGE_MIME_TYPES.has(mimeType.toLowerCase());
 }
 
+export function supportsReasoningEffort(modelId: string): boolean {
+  return /^(gpt-[56]|o[134]|codex)/i.test(modelId.trim());
+}
+
 function modelLooksVisionCapable(providerId: ProviderId, modelId: string): boolean {
   const model = modelId.trim().toLowerCase();
   if (!model) return false;

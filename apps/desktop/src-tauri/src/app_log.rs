@@ -18,7 +18,15 @@ pub fn init() {
         write_line(&format!("panic: {panic_info}"));
     }));
 
-    write_line("WorkBuddy started");
+    write_line(&format!(
+        "WorkBuddy started pid={} version={} debug={} executable={}",
+        std::process::id(),
+        env!("CARGO_PKG_VERSION"),
+        cfg!(debug_assertions),
+        std::env::current_exe()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default()
+    ));
 }
 
 #[tauri::command]

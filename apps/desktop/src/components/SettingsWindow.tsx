@@ -1,5 +1,5 @@
-import { Save, SlidersHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { Check, LoaderCircle, Save, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { ProviderId, WorkBuddyConfig } from "../config/schema";
 import type { Translations } from "../i18n";
 import type { LoadedPetPack } from "../pet/PetPackLoader";
@@ -18,7 +18,7 @@ type SettingsWindowProps = {
   onConfigChange: (config: WorkBuddyConfig) => void;
   onApiKeyChange: (provider: ProviderId, value: string) => void;
   onApiKeyDelete: (provider: ProviderId) => void;
-  onSave: () => void;
+  onSave: () => Promise<void>;
   onClose: () => void;
   onPetCatalogChange?: (activePetId?: string) => void;
 };
@@ -38,6 +38,25 @@ export function SettingsWindow({
   onPetCatalogChange,
 }: SettingsWindowProps) {
   const [tab, setTab] = useState<SettingsTab>("providers");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    setSaveState("idle");
+    setSaveError("");
+  }, [config]);
+
+  async function save() {
+    setSaveState("saving");
+    setSaveError("");
+    try {
+      await onSave();
+      setSaveState("saved");
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : labels.settings.saveFailed);
+    }
+  }
 
   return (
     <section className="panel settings-panel">
@@ -50,14 +69,20 @@ export function SettingsWindow({
           </h2>
         </div>
         <div className="panel-actions">
-          <button type="button" title={labels.settings.save} onClick={onSave}>
-            <Save size={17} />
+          <button type="button" title={labels.settings.save} aria-label={labels.settings.save} disabled={saveState === "saving"} onClick={() => void save()}>
+            {saveState === "saving" ? <LoaderCircle className="spin" size={17} /> : saveState === "saved" ? <Check size={17} /> : <Save size={17} />}
           </button>
           <button type="button" title={labels.settings.close} onClick={onClose}>
             <X size={17} />
           </button>
         </div>
       </header>
+
+      {saveState !== "idle" ? (
+        <div className={`settings-save-feedback ${saveState}`} role="status" aria-live="polite">
+          {saveState === "saving" ? labels.settings.saving : saveState === "saved" ? labels.settings.saved : `${labels.settings.saveFailed}: ${saveError}`}
+        </div>
+      ) : null}
 
       <div className="tabs">
         <button className={tab === "providers" ? "active" : ""} type="button" onClick={() => setTab("providers")}>

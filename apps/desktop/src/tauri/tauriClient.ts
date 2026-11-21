@@ -4,6 +4,7 @@ export type ScreenEdge = "left" | "right" | "top" | "bottom";
 export type DesktopWindowMode = "pet" | "chat";
 export type ScreenPoint = { x: number; y: number };
 export type WindowFrame = ScreenPoint & { scaleFactor: number };
+export type PointerFrame = WindowFrame & { pointerX: number; pointerY: number };
 export type PointerState = ScreenPoint & { leftPressed: boolean };
 export type PointerDragResult = { activated: boolean; edge: ScreenEdge | null };
 
@@ -14,7 +15,7 @@ const FLOATING_BUBBLE_STAGE_OFFSET = 122;
 const PET_WINDOW_TOP = 12;
 const PET_STAGE_PADDING_TOP = 34;
 
-let previousDesktopWindowLayout: { mode: DesktopWindowMode; petSize: number; hasFloatingBubble: boolean } | null = null;
+let previousDesktopWindowLayout: { mode: DesktopWindowMode; petSize: number; hasFloatingBubble: boolean; chatExpanded: boolean } | null = null;
 let settingsWindowOpenPromise: Promise<void> | null = null;
 let desiredMousePassthrough = false;
 let appliedMousePassthrough: boolean | null = null;
@@ -44,11 +45,28 @@ export function writeAppLog(message: string, details?: Record<string, unknown>):
   void invokeCommand("append_app_log", { message: line }).catch(() => undefined);
 }
 
-function windowSizeForMode(mode: DesktopWindowMode, petSize: number, hasFloatingBubble = false) {
+function windowSizeForMode(
+  mode: DesktopWindowMode,
+  petSize: number,
+  hasFloatingBubble = false,
+  chatExpanded = false,
+  availableSize = { width: 1280, height: 900 },
+) {
+  if (mode === "chat" && chatExpanded) {
+    return {
+      width: Math.min(
+        Math.max(320, availableSize.width - 32),
+        Math.max(820, petSize + 92 + 640),
+      ),
+      height: Math.min(760, Math.max(410, availableSize.height - 32)),
+    };
+  }
+
   const bubbleHeight = FLOATING_BUBBLE_WINDOW_HEIGHT;
+  const chatControlsHeight = mode === "chat" ? 56 : 0;
   return {
     width: Math.max(340, petSize + 138),
-    height: Math.max(410, petSize + 230 + bubbleHeight),
+    height: Math.max(410, petSize + 230 + bubbleHeight + chatControlsHeight),
   };
 }
 
@@ -56,8 +74,18 @@ function petStageOffsetForBubble(hasFloatingBubble: boolean) {
   return FLOATING_BUBBLE_STAGE_OFFSET;
 }
 
-function petAnchorForLayout(mode: DesktopWindowMode, petSize: number, hasFloatingBubble: boolean) {
-  const size = windowSizeForMode(mode, petSize, hasFloatingBubble);
+function petAnchorForLayout(
+  mode: DesktopWindowMode,
+  petSize: number,
+  hasFloatingBubble: boolean,
+  chatExpanded = false,
+  availableSize = { width: 1280, height: 900 },
+) {
+  const size = windowSizeForMode(mode, petSize, hasFloatingBubble, chatExpanded, availableSize);
+  if (mode === "chat" && chatExpanded) {
+    return { x: size.width / 2, y: size.height / 2 };
+  }
+
   return {
     x: size.width / 2,
     y: PET_WINDOW_TOP + PET_STAGE_PADDING_TOP + petStageOffsetForBubble(hasFloatingBubble) + petSize / 2,
@@ -88,23 +116,34 @@ export async function setDesktopWindowMode(
   mode: DesktopWindowMode,
   petSize: number,
   hasFloatingBubble = false,
+  chatExpanded = false,
 ): Promise<void> {
   if (!isTauriRuntime()) return;
 
-  const { width, height } = windowSizeForMode(mode, petSize, hasFloatingBubble);
   const { appWindow, currentMonitor, LogicalSize, PhysicalPosition } = await import("@tauri-apps/api/window");
   const monitor = await currentMonitor();
   const scaleFactor = monitor?.scaleFactor || window.devicePixelRatio || 1;
+  const availableSize = monitor
+    ? { width: monitor.size.width / scaleFactor, height: monitor.size.height / scaleFactor }
+    : undefined;
+  const { width, height } = windowSizeForMode(mode, petSize, hasFloatingBubble, chatExpanded, availableSize);
   const position = await appWindow.outerPosition();
   const previousAnchor = previousDesktopWindowLayout
     ? petAnchorForLayout(
         previousDesktopWindowLayout.mode,
         previousDesktopWindowLayout.petSize,
         previousDesktopWindowLayout.hasFloatingBubble,
+        previousDesktopWindowLayout.chatExpanded,
+        availableSize,
       )
     : null;
-  const nextAnchor = petAnchorForLayout(mode, petSize, hasFloatingBubble);
-  const nextPosition = previousAnchor
+  const nextAnchor = petAnchorForLayout(mode, petSize, hasFloatingBubble, chatExpanded, availableSize);
+  const nextPosition = chatExpanded && mode === "chat" && monitor
+    ? {
+        x: Math.round(monitor.position.x + (monitor.size.width - width * scaleFactor) / 2),
+        y: Math.round(monitor.position.y + (monitor.size.height - height * scaleFactor) / 2),
+      }
+    : previousAnchor
     ? {
         x: Math.round(position.x + (previousAnchor.x - nextAnchor.x) * scaleFactor),
         y: Math.round(position.y + (previousAnchor.y - nextAnchor.y) * scaleFactor),
@@ -119,11 +158,13 @@ export async function setDesktopWindowMode(
         previousDesktopWindowLayout.mode,
         previousDesktopWindowLayout.petSize,
         previousDesktopWindowLayout.hasFloatingBubble,
+        previousDesktopWindowLayout.chatExpanded,
+        availableSize,
       )
     : null;
 
   if (previousSize?.width === width && previousSize.height === height && !shouldMoveWindow) {
-    previousDesktopWindowLayout = { mode, petSize, hasFloatingBubble };
+    previousDesktopWindowLayout = { mode, petSize, hasFloatingBubble, chatExpanded };
     return;
   }
 
@@ -134,7 +175,7 @@ export async function setDesktopWindowMode(
       : Promise.resolve(),
   ]);
 
-  previousDesktopWindowLayout = { mode, petSize, hasFloatingBubble };
+  previousDesktopWindowLayout = { mode, petSize, hasFloatingBubble, chatExpanded };
 
   if (mode !== "chat") return;
 
@@ -440,6 +481,24 @@ export async function getWindowFrame(): Promise<WindowFrame | null> {
   };
 }
 
+export async function getPointerFrame(): Promise<PointerFrame | null> {
+  if (!isTauriRuntime()) return null;
+  const frame = await invokeCommand<{
+    x: number;
+    y: number;
+    windowX: number;
+    windowY: number;
+    scaleFactor: number;
+  }>("get_pointer_frame");
+  return {
+    pointerX: frame.x,
+    pointerY: frame.y,
+    x: frame.windowX,
+    y: frame.windowY,
+    scaleFactor: frame.scaleFactor || window.devicePixelRatio || 1,
+  };
+}
+
 export async function dragWindowWithPointer(
   petSize = 190,
   options: {
@@ -463,13 +522,14 @@ export async function dragWindowWithPointer(
   let lastY = startPosition.y;
   let moveInFlight = false;
   let moveGeneration = 0;
+  let moveQueueStalled = false;
   let queuedPosition: { x: number; y: number } | null = null;
   const pointerSamples: PointerSample[] = [
     { x: startPointer.x, y: startPointer.y, time: performance.now() },
   ];
 
   function flushMoveQueue() {
-    if (moveInFlight || !queuedPosition) return;
+    if (moveInFlight || moveQueueStalled || !queuedPosition) return;
 
     const next = queuedPosition;
     queuedPosition = null;
@@ -478,14 +538,18 @@ export async function dragWindowWithPointer(
     const watchdog = window.setTimeout(() => {
       if (moveInFlight && generation === moveGeneration) {
         writeAppLog("dragWindowWithPointer:setPositionTimeout", next);
-        moveInFlight = false;
-        flushMoveQueue();
+        moveQueueStalled = true;
+        queuedPosition = null;
       }
     }, 350);
 
     void appWindow
       .setPosition(new PhysicalPosition(next.x, next.y))
-      .catch(() => undefined)
+      .catch((error) => {
+        moveQueueStalled = true;
+        queuedPosition = null;
+        writeAppLog("dragWindowWithPointer:setPositionFailed", { error: String(error) });
+      })
       .finally(() => {
         window.clearTimeout(watchdog);
         if (generation !== moveGeneration) return;
@@ -495,6 +559,7 @@ export async function dragWindowWithPointer(
   }
 
   function queueMove(x: number, y: number) {
+    if (moveQueueStalled) return;
     if (x === lastX && y === lastY) return;
     lastX = x;
     lastY = y;
@@ -512,6 +577,8 @@ export async function dragWindowWithPointer(
         }
         if (performance.now() - startedAt > 800) {
           writeAppLog("dragWindowWithPointer:moveQueueWaitTimeout", { moveInFlight, queuedPosition });
+          moveQueueStalled = true;
+          queuedPosition = null;
           resolve();
           return;
         }
@@ -578,6 +645,7 @@ export async function dragWindowWithPointer(
     tick();
   });
 
+  if (moveQueueStalled) return { activated, edge: null };
   if (!activated) return { activated, edge: null };
 
   const velocity = dragReleaseVelocity(pointerSamples);

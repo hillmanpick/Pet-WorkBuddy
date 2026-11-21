@@ -10,6 +10,7 @@ export const defaultConfig: WorkBuddyConfig = {
       baseUrl: "https://api.openai.com/v1",
       apiKeyRef: "workbuddy.openai.api_key",
       modelId: "gpt-5.5",
+      reasoningEffort: "medium",
       imageInputMode: "auto",
       temperature: 0.7,
       maxTokens: 2048,

@@ -47,7 +47,10 @@ pub fn handle_tray_event(app: &tauri::AppHandle, event: SystemTrayEvent) {
                 }
             }
         }
-        "quit" => app.exit(0),
+        "quit" => {
+            crate::app_log::write_line("Exit requested by tray menu");
+            app.exit(0);
+        }
         _ => {}
     }
 }
