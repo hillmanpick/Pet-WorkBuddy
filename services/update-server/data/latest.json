@@ -1,25 +1,27 @@
 {
   "product": "WorkBuddy",
   "platform": "windows-x86_64",
-  "version": "0.1.7",
-  "downloadUrl": "https://www.hillmanpick.xin/download/workbuddy/WorkBuddy_0.1.7_x64-setup.exe",
-  "sha256": "256bcf8eb64fbcaAA7a22ca6b1d4ec263c05b070be70cf5e1d6fa428a4a457e1",
-  "size": 2897192,
-  "publishedAt": "2026-11-21T02:33:09Z",
+  "version": "0.1.8",
+  "downloadUrl": "https://github.com/hillmanpick/Pet-WorkBuddy/releases/download/v0.1.8/WorkBuddy_0.1.8_x64-setup.exe",
+  "sha256": "72abe9e8e5a0426fe201f7aa52741fa067315edfc9d8e73bfc704e2c9be9bdee",
+  "size": 2899357,
+  "publishedAt": "2026-11-21T03:21:15Z",
   "notes": {
     "zh": [
       "聊天记录改为独立会话，可新建、查看并切换历史会话",
       "新增放大聊天布局，显示桌宠、历史会话和当前消息；回答支持选中和复制",
       "设置中可刷新并选择服务商提供的模型，聊天中可调整支持模型的推理强度",
       "保存设置后提供成功或失败反馈",
-      "增加应用退出和前端异常诊断日志，并降低鼠标/窗口状态轮询频率"
+      "增加应用退出和前端异常诊断日志，并降低鼠标/窗口状态轮询频率",
+      "应用内更新检查现直接读取 GitHub 最新正式 Release 并打开对应安装包下载"
     ],
     "en": [
       "Chat history is organized into separate conversations that can be created, browsed, and selected",
       "Expanded chat shows the pet, conversation history, and current messages; answers can be selected and copied",
       "Refresh and choose provider models in settings, with reasoning-effort controls for supported models",
       "Settings now report whether saving succeeded or failed",
-      "Added app-exit and frontend-error diagnostics, and reduced pointer/window polling frequency"
+      "Added app-exit and frontend-error diagnostics, and reduced pointer/window polling frequency",
+      "In-app update checks now read the latest stable GitHub Release and open its installer download"
     ]
   }
 }
