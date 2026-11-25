@@ -420,8 +420,8 @@ button {
 
 .chat-session-action:hover,
 .chat-session-action.active {
-  color: var(--chat-accent, #2e6f73);
-  background: var(--chat-soft, #edf7f4);
+  color: var(--chat-accent, #525a64);
+  background: var(--chat-soft, #f0f1f3);
 }
 
 .chat-session-action:disabled {
@@ -467,7 +467,7 @@ button {
 
 .chat-session-option:hover,
 .chat-session-option.active {
-  background: #edf7f4;
+  background: var(--chat-soft, #f0f1f3);
 }
 
 .chat-session-option strong,
@@ -596,8 +596,8 @@ button {
 }
 
 .chat-session-option.sidebar-option.active {
-  border-color: var(--chat-border, rgba(46, 111, 115, 0.2));
-  background: var(--chat-soft, #edf7f4);
+  border-color: var(--chat-border, rgba(71, 78, 88, 0.17));
+  background: var(--chat-soft, #f0f1f3);
 }
 
 .chat-session-option.sidebar-option strong,
@@ -748,13 +748,13 @@ button {
 .message.user {
   align-self: flex-end;
   color: #ffffff;
-  background: #2e6f73;
+  background: var(--chat-accent, #525a64);
 }
 
 .message.assistant {
   align-self: flex-start;
-  color: #24313a;
-  background: #edf3f1;
+  color: #343a40;
+  background: var(--chat-soft, #f0f1f3);
 }
 
 .message-role {
@@ -792,12 +792,12 @@ button {
 }
 
 .message-copy-action:hover {
-  color: var(--chat-accent, #2e6f73);
+  color: var(--chat-accent, #525a64);
   background: rgba(35, 48, 58, 0.08);
 }
 
 .message-copy-action:focus-visible {
-  outline: 2px solid var(--chat-accent, #2e6f73);
+  outline: 2px solid var(--chat-accent, #525a64);
   outline-offset: 1px;
 }
 
@@ -957,15 +957,15 @@ button {
   border: 1px solid var(--chat-border, rgba(35, 48, 58, 0.1));
   border-radius: 8px;
   background: var(--chat-surface, rgba(250, 252, 251, 0.96));
-  box-shadow: 0 12px 28px rgba(32, 49, 57, 0.14);
+  box-shadow: 0 8px 22px rgba(32, 41, 51, 0.1);
 }
 
 .chat-panel .prompt-box.dragging {
-  border-color: var(--chat-accent, rgba(46, 111, 115, 0.56));
-  background: var(--chat-soft, rgba(237, 247, 244, 0.98));
+  border-color: var(--chat-accent, rgba(71, 78, 88, 0.4));
+  background: var(--chat-soft, rgba(240, 241, 243, 0.98));
   box-shadow:
-    0 0 0 2px rgba(46, 111, 115, 0.12),
-    0 16px 36px rgba(32, 49, 57, 0.16);
+    0 0 0 2px rgba(71, 78, 88, 0.1),
+    0 12px 28px rgba(32, 41, 51, 0.12);
 }
 
 .prompt-box textarea,
@@ -995,8 +995,8 @@ button {
 }
 
 .chat-panel .prompt-box textarea:focus {
-  border-color: var(--chat-accent, #2e6f73);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chat-accent, #2e6f73) 16%, transparent);
+  border-color: var(--chat-accent, #525a64);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chat-accent, #525a64) 14%, transparent);
 }
 
 .prompt-box button {
@@ -1004,14 +1004,23 @@ button {
   height: 40px;
   align-self: end;
   color: var(--chat-on-accent, #ffffff);
-  background: var(--chat-accent, #2e6f73);
+  background: var(--chat-accent, #525a64);
+}
+
+.chat-panel .prompt-box button:hover {
+  background: color-mix(in srgb, var(--chat-accent, #525a64) 88%, #000000);
 }
 
 .prompt-box .attachment-button {
   width: 34px;
   height: 38px;
   color: var(--chat-accent, #52616b);
-  background: var(--chat-soft, #edf3f1);
+  background: var(--chat-soft, #f0f1f3);
+}
+
+.chat-panel .prompt-box .attachment-button:hover {
+  color: var(--chat-accent, #525a64);
+  background: var(--chat-soft, #f0f1f3);
 }
 
 .attachment-tray {
@@ -1512,7 +1521,7 @@ button {
   border: 1px solid rgba(35, 48, 58, 0.12);
   border-radius: 6px;
   color: #27363c;
-  background: rgba(250, 252, 251, 0.96);
+  background: #ffffff;
   font-size: 11px;
 }
 

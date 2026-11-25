@@ -4,13 +4,21 @@ import { invokeCommand, isTauriRuntime } from "../tauri/tauriClient";
 
 const CONFIG_KEY = "workbuddy.config";
 const SECRET_PREFIX = "workbuddy.secret.";
+const CHAT_THEME_MIGRATION_KEY = "workbuddy.chat.theme.graphite.v1";
 
 export async function loadConfig(): Promise<WorkBuddyConfig> {
   const raw = localStorage.getItem(CONFIG_KEY);
   if (!raw) return defaultConfig;
 
   try {
-    return mergeConfig(JSON.parse(raw) as Partial<WorkBuddyConfig>);
+    const stored = JSON.parse(raw) as Partial<WorkBuddyConfig>;
+    const config = mergeConfig(stored);
+    if (stored.appearance?.chatColor === "mint" && localStorage.getItem(CHAT_THEME_MIGRATION_KEY) !== "done") {
+      config.appearance.chatColor = "graphite";
+      await saveConfig(config);
+      localStorage.setItem(CHAT_THEME_MIGRATION_KEY, "done");
+    }
+    return config;
   } catch {
     return defaultConfig;
   }

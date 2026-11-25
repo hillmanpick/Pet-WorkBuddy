@@ -72,7 +72,7 @@ export const defaultConfig: WorkBuddyConfig = {
     petSize: 190,
     language: "zh",
     petName: "",
-    chatColor: "mint",
+    chatColor: "graphite",
   },
   behavior: {
     startHidden: false,

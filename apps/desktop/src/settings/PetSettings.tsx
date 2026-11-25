@@ -20,7 +20,7 @@ const chatColorSwatches = [
   { id: "rose", color: "#c65f89", labelKey: "chatColorRose" },
   { id: "blue", color: "#4778c7", labelKey: "chatColorBlue" },
   { id: "amber", color: "#b8792f", labelKey: "chatColorAmber" },
-  { id: "graphite", color: "#4b5563", labelKey: "chatColorGraphite" },
+  { id: "graphite", color: "#525a64", labelKey: "chatColorGraphite" },
 ] as const;
 const motionFpsOptions: MotionFps[] = [30, 60, 90, 120];
 
@@ -152,7 +152,7 @@ export function PetSettings({ config, pets, labels, onConfigChange, onPetCatalog
             <span>{labels.chatColor}</span>
             <div className="color-swatch-grid" role="group" aria-label={labels.chatColor}>
               {chatColorSwatches.map((swatch) => {
-                const active = (config.appearance.chatColor || "mint") === swatch.id;
+                const active = (config.appearance.chatColor || "graphite") === swatch.id;
                 return (
                   <button
                     className={active ? "color-swatch active" : "color-swatch"}

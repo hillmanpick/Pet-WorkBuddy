@@ -107,10 +107,10 @@ const CHAT_COLOR_THEMES: Record<
     onAccent: "#ffffff",
   },
   graphite: {
-    accent: "#4b5563",
-    border: "rgba(75, 85, 99, 0.24)",
-    soft: "#f1f5f9",
-    surface: "rgba(248, 250, 252, 0.97)",
+    accent: "#525a64",
+    border: "rgba(71, 78, 88, 0.17)",
+    soft: "#f0f1f3",
+    surface: "rgba(250, 250, 251, 0.98)",
     onAccent: "#ffffff",
   },
 };
@@ -120,7 +120,7 @@ function randomFrom<T>(items: readonly T[]): T | undefined {
 }
 
 function chatColorTheme(value: string | undefined) {
-  return CHAT_COLOR_THEMES[value || "mint"] ?? CHAT_COLOR_THEMES.mint;
+  return CHAT_COLOR_THEMES[value || "graphite"] ?? CHAT_COLOR_THEMES.graphite;
 }
 
 function yawForMovement(dx: number, dy: number): number {
